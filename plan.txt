@@ -1,0 +1,20 @@
+1. recive http request from client in form similar too: GET /example HTTP/1.1
+
+2. parse the request
+    - extract the path from the request
+    - extract the query string from the request
+    - extract the method from the request
+
+3. create a response
+    - look for file requested in the path
+    - if file exists, read the file
+    - if file does not exist, return 404
+    - if file exists, return 200
+    - if file exists, return the file contents
+
+4. send the response back to the client
+    - send the status line
+    - send the headers
+    - send a blank line
+    - send the body
+

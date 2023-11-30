@@ -1,0 +1,127 @@
+/* style.css */
+/* Use variables for colors */
+:root {
+    --primary-color: #333;
+    --secondary-color: #f0f0f0;
+    --accent-color: #ff9900;
+}
+
+/* Use a box-sizing of border-box for all elements */
+* {
+    box-sizing: border-box;
+}
+
+/* Style the body element */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: var(--secondary-color);
+    color: var(--primary-color);
+}
+
+/* Style the container element */
+.container {
+    width: 80%;
+    max-width: 600px;
+    border: 1px solid var(--primary-color);
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+/* Style the logo image */
+.logo {
+    display: block;
+    width: 100px;
+    height: 100px;
+    margin: 0 auto;
+}
+
+/* Style the h1 element */
+h1 {
+    font-size: 2.5em;
+    text-align: center;
+    margin: 10px 0;
+}
+
+/* Style the form element */
+form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Style the form group element */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+/* Style the label element */
+label {
+    font-weight: bold;
+}
+
+/* Style the input element */
+input {
+    padding: 10px;
+    border: 1px solid var(--primary-color);
+    border-radius: 5px;
+    outline: none;
+}
+
+/* Style the button element */
+button {
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+    background-color: var(--accent-color);
+    color: var(--secondary-color);
+    font-weight: bold;
+    cursor: pointer;
+}
+
+/* Style the messages element */
+#messages {
+    margin: 20px 0;
+    overflow-y: auto;
+    height: 200px;
+}
+
+/* Style the message element */
+.message {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 10px 0;
+}
+
+/* Style the message image element */
+.message img {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+}
+
+/* Style the message content element */
+.message-content {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+/* Style the message name element */
+.message-name {
+    font-weight: bold;
+}
+
+/* Style the message text element */
+.message-text {
+    font-style: italic;
+}
