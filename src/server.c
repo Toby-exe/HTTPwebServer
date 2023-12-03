@@ -4,16 +4,16 @@ void check_err(int val, char *msg)
 {
     if (val == -1)
     {
-        perror(msg);
-        exit(1);
+        printf("%s\n", msg);
     }
 }
 
-void init(http_response *response)
+void init(Http_response *response)
 {
-    strcpy(response->status_code, "");
+
     strcpy(response->content_type, "");
     strcpy(response->body, "");
+    strcpy(response->file_path, "");
 }
 
 char *get_mime_type(char *type)
@@ -74,7 +74,7 @@ char *get_file(char *file_path)
 
     if (fp == NULL)
     {
-        perror("Error opening file");
+        printf("Error opening file\n");
         return NULL;
     }
 
@@ -99,11 +99,40 @@ char *get_file(char *file_path)
 }
 
 int save_file(char *file_path, const char *data)
-{   
+{
     FILE *fp;
     char file_path_with_dir[1024] = "../public/";
     strcat(file_path_with_dir, file_path);
-    char *mime_type = get_mime_type(file_path);
+    fp = fopen(file_path_with_dir, "w");
+
+    if (fp == NULL)
+    {
+        printf("Error opening file\n");
+        return -1;
+    }
+
+    fputs(data, fp);
+    fclose(fp);
+
+    return 0;
+}
+
+/**
+ * @brief Save a JSON object to a file
+ *
+ * This function takes a file path and a JSON string as input and appends the
+ * JSON object to an existing or new JSON array in the file. It uses the cJSON
+ * library to parse and print JSON data.
+ *
+ * @param[in] file_path The relative path of the file to save the JSON object to
+ * @param[in] data The JSON string to be saved
+ * @return 0 if the operation was successful, -1 otherwise
+ */
+int save_json(char *file_path, const char *data)
+{
+    FILE *fp;
+    char file_path_with_dir[1024] = "../public/";
+    strcat(file_path_with_dir, file_path);
     fp = fopen(file_path_with_dir, "r");
     cJSON *json;
 
@@ -115,8 +144,8 @@ int save_file(char *file_path, const char *data)
     else
     {
         // if the file exists, read its content
-        char buffer[4096];
-        size_t bytes_read = fread(buffer, 1, 4096, fp);
+        char buffer[MAX_BODY_SIZE];
+        size_t bytes_read = fread(buffer, 1, MAX_BODY_SIZE, fp);
         fclose(fp);
 
         if (bytes_read == 0)
@@ -143,7 +172,7 @@ int save_file(char *file_path, const char *data)
     fp = fopen(file_path_with_dir, "w");
     if (fp == NULL)
     {
-        perror("Error opening file");
+        printf("Error opening file\n");
         return -1;
     }
     char *json_string = cJSON_Print(json);
@@ -155,10 +184,49 @@ int save_file(char *file_path, const char *data)
     return 0;
 }
 
-void send_response(int connfd, http_response response)
+/**
+ * @brief Sends an HTTP response to a client.
+ *
+ * This function builds an HTTP response header and sends it to the client,
+ * followed by the contents of a file. It uses the TCP_CORK option to minimize
+ * the number of packets sent and to tune performance. This is useful when
+ * sending a small amount of header data in front of the file contents. - For
+ * more see NOTES section for sendfile(2).
+ *
+ * @param connfd The file descriptor of the connection to the client.
+ * @param response The Http_response struct containing the details of the response.
+ *
+ * @return void
+ */
+void send_response(int connfd, Http_response response)
 {
+    // Enable TCP_CORK
+    int cork = 1;
+    setsockopt(connfd, IPPROTO_TCP, TCP_CORK, &cork, sizeof(cork));
+
+    // open the file
+    int fd = open(response.file_path, O_RDONLY);
+    if (fd == -1)
+    {
+        printf("Error opening file\n");
+        strcpy(response.status_code, "404 File Not Found");
+        strcpy(response.content_type, "text/html");
+
+        // Try to open the 404.html file
+        fd = open("../public/404.html", O_RDONLY);
+        if (fd == -1)
+        {
+            printf("Error opening 404.html file\n");
+            return;
+        }
+    }
+    else
+    {
+        strcpy(response.status_code, "200 OK");
+    }
+
     // build response header
-    char http_header[1024] = "HTTP/1.1 ";
+    char http_header[MAX_HEADER_SIZE] = "HTTP/1.1 ";
     strcat(http_header, response.status_code);
     strcat(http_header, "\r\n");
     strcat(http_header, "Content-Type: ");
@@ -168,19 +236,11 @@ void send_response(int connfd, http_response response)
     // send the response header to the client
     send(connfd, http_header, strlen(http_header), 0);
 
-    // open the file
-    int fd = open(response.file_path, O_RDONLY);
-    if (fd == -1)
-    {
-        perror("Error opening file");
-        return;
-    }
-
     // get the size of the file
     struct stat stat_buf;
     if (fstat(fd, &stat_buf) == -1)
     {
-        perror("Error getting file size");
+        printf("Error getting file size\n");
         return;
     }
 
@@ -188,84 +248,80 @@ void send_response(int connfd, http_response response)
     ssize_t sent_bytes = sendfile(connfd, fd, NULL, stat_buf.st_size);
     if (sent_bytes == -1)
     {
-        perror("Error sending file");
+        printf("Error sending file\n");
         return;
     }
 
     // close the file
     close(fd);
 
-    return;
-}
-
-void response_fnf(int connfd)
-{
-    // send 404 File Not Found response to client use send_response()
-    http_response new_response;
-    char *response_data = get_file("404.html");
-
-    init(&new_response);
-
-    strcpy(new_response.status_code, "404 File Not Found");
-    strcpy(new_response.body, response_data);
-    strcpy(new_response.content_type, "text/html");
-
-    send_response(connfd, new_response);
+    // Disable TCP_CORK
+    cork = 0;
+    setsockopt(connfd, IPPROTO_TCP, TCP_CORK, &cork, sizeof(cork));
 
     return;
 }
 
-void response_ok(int connfd, request_data req_data, char *res_data)
+int http_get_hndlr(int connfd, Http_request req)
 {
+    Http_response new_response;
 
-    // send 200 OK response to client and the requested file use send_response()
-    // this needs to be modfied to send the correct content type (mime type)
-    // ie we need to match the file extension to the correct mime type
-    http_response new_response;
+    if (strcmp(req.file_path, "") == 0)
+    {
+        printf("tinyserver: file path is empty\n");
+        return -1;
+    }
+
+    printf("GOT THIS FAR\n");
+
+    char *mime_type = get_mime_type(req.file_path);
+    char file_path_with_dir[4096] = "../public/";
 
     init(&new_response);
 
-    strcpy(new_response.status_code, "200 OK");
-    strcpy(new_response.body, res_data);
-    // get mime type based on file extension
-    // for now we will just string compare to type but this is O(n)
-    char *mime_type = get_mime_type(req_data.file_path);
-
-    printf("tinyserver: mime type is %s\n", mime_type);
-
+    strcpy(new_response.body, req.body);
     strcpy(new_response.content_type, mime_type);
-
-    // append public/ to the file path
-    char file_path_with_dir[1024] = "../public/";
-    strcat(file_path_with_dir, req_data.file_path);
+    strcat(file_path_with_dir, req.file_path);
     strcpy(new_response.file_path, file_path_with_dir);
 
     send_response(connfd, new_response);
 
-    return;
+    return 0;
 }
 
-void http_get_hndlr(int connfd, request_data req_data)
+int http_post_hndlr(int connfd, Http_request req)
 {
-    printf("tinyserver: getting file %s\n", req_data.file_path);
-
-    char *file_data = get_file(req_data.file_path);
-
-    if (file_data == NULL) // file not found (404)
+    if (strcmp(req.body, "") == 0)
     {
-        response_fnf(connfd);
+        printf("tinyserver: body is empty\n");
+        return -1;
     }
-    else // file found (200)
+    if (strcmp(req.file_path, "") == 0)
     {
-        response_ok(connfd, req_data, file_data);
+        printf("tinyserver: file path is empty\n");
+        return -1;
     }
 
-    return;
+    char *mime_type = get_mime_type(req.file_path);
+
+    if (strcmp(mime_type, "application/json") == 0)
+    {
+        save_json(req.file_path, req.body);
+    }
+    else
+    {
+        save_file(req.file_path, req.body);
+    }
+
+    // send simple OK
+    send(connfd, "HTTP/1.1 200 OK\r\n\r\n", 19, 0);
+
+    return 0;
 }
 
-request_data parse_http_request(const char *request)
+Http_request parse_Http_request(char *request)
 {
-    request_data req;
+    Http_request req;
     regex_t regex;
     regmatch_t pmatch[2]; // only need 1 match for file path
     int match;
@@ -274,13 +330,12 @@ request_data parse_http_request(const char *request)
     match = regcomp(&regex, "^GET", 0); // ^ means start of string
     match = regexec(&regex, request, 0, NULL, 0);
     if (match == 0)
-        strcpy(req.method, "GET");
-
+        req.method = HTTP_GET;
     match = regcomp(&regex, "^POST", 0);
     match = regexec(&regex, request, 0, NULL, 0);
     if (match == 0)
     {
-        strcpy(req.method, "POST");
+        req.method = HTTP_POST;
         // right after the two new lines is the body of the request
         char *body_start = strstr(request, "\r\n\r\n");
         if (body_start != NULL)
@@ -290,6 +345,11 @@ request_data parse_http_request(const char *request)
             // now `body` contains the body of the request
             strcpy(req.body, body);
         }
+    }
+    else
+    {
+        strcpy(req.body, "");
+        printf("Error parsing body\n");
     }
 
     // next we need to determine the file path
@@ -304,130 +364,250 @@ request_data parse_http_request(const char *request)
         req.file_path[end - start - 1] = '\0';                        // null terminate the string
     }
     else
-        perror("Error parsing file path");
+    {
+        strcpy(req.file_path, "");
+        printf("Error parsing file path\n");
+    }
 
     regfree(&regex);
 
     return req;
 }
 
-void *handle_client(http_request *request)
+int read_request(int connfd, char *buffer, size_t buffer_size)
 {
-    // get thread id
-    pthread_t thread_id = pthread_self();
-    // priont in yellow
-    printf("\033[33m");
-    printf("tinyserver: thread id is %ld\n", thread_id);
-    // print in default color
-    printf("\033[0m");
-    
-    // read request from client
-    char buffer[4096];
-    ssize_t bytes_read = recv(request->connfd, buffer, sizeof(buffer) - 1, 0);
-
+    ssize_t bytes_read = recv(connfd, buffer, buffer_size - 1, 0);
+    printf("tinyserver: bytes read: %ld\n", bytes_read);
     if (bytes_read < 0)
     {
-        perror("recv failed");
-        return NULL;
+        printf("recv failed\n");
+        return -1;
     }
-
-    // Null-terminate the received data
+    else if (bytes_read == 0)
+    {
+        printf("tinyserver: client disconnected\n");
+        return -1;
+    }
     buffer[bytes_read] = '\0';
 
-    printf("tinyserver: got request from client\n");
-    printf("This is the buffer contents\n%s\n", buffer);
+    return 0;
+}
 
-    // parse request
-    request->data = parse_http_request(buffer);
+void *handle_client(Http_client *client)
+{
+    /*DEBUG*/
+    printf("\n\033[32m##############################################\n");
+    printf("\033[0m");
 
-    printf("tinyserver: file path is %s\n", request->data.file_path);
-    printf("tinyserver: body is %s\n", request->data.body);
+    printf("tinyserver: THIS IS THE START OF A NEW REQUEST\n");
+    pthread_t thread_id = pthread_self();
+    printf("tinyserver: \033[33mthread id: %ld\033[0m\n", thread_id);
 
-    if (strcmp(request->data.method, "GET") == 0)
+    // read request from client
+    char buffer[4096];
+    if (read_request(client->connfd, buffer, sizeof(buffer)) == FAIL)
     {
-        printf("tinyserver: got GET request\n");
-        http_get_hndlr(request->connfd, request->data);
+        printf("tinyserver: reading request failed\n");
+        // close(client->connfd);
+        // free(client);
+        return NULL;
     }
-    else if (strcmp(request->data.method, "POST") == 0)
-    {
-        printf("tinyserver: got POST request\n");
+    /*DEBUG*/
+    printf("tinyserver: buffer contents are:\n\033[36m%s\n\033[0m", buffer);
 
-        if (request->data.body == NULL)
+    client->request = parse_Http_request(buffer);
+
+    // print everything in the request
+    printf("tinyserver: method is %d\n", client->request.method);
+    printf("tinyserver: file path is %s\n", client->request.file_path);
+    printf("tinyserver: body is %s\n", client->request.body);
+
+    switch (client->request.method)
+    {
+    case HTTP_GET:
+        printf("tinyserver: method is GET\n");
+        check_err(http_get_hndlr(client->connfd, client->request), "Error handling GET request");
+        break;
+    case HTTP_POST:
+        printf("tinyserver: method is POST\n");
+        check_err(http_post_hndlr(client->connfd, client->request), "Error handling POST request");
+        break;
+    case HTTP_PUT:
+        printf("tinyserver: method is PUT\n");
+        break;
+    default:
+        printf("tinyserver: method is unknown\n");
+        break;
+    }
+
+    close(client->connfd);
+    // free(client);
+
+    printf("tinyserver: THIS IS THE END OF A NEW REQUEST\n");
+    printf("\033[32m##############################################\n\n\n");
+    printf("\033[0m");
+
+    return 0;
+}
+
+// void *handle_client_wrapper(void *arg)
+// {
+//     Http_client *client = (Http_client *)arg;
+//     handle_client(client);
+
+//     return NULL;
+// }
+
+long double get_cpu_usage()
+{
+    FILE *fp;
+    long double a[4], b[4], loadavg;
+
+    fp = fopen("/proc/stat", "r");
+    fscanf(fp, "%*s %Lf %Lf %Lf %Lf", &a[0], &a[1], &a[2], &a[3]);
+    fclose(fp);
+    sleep(1);
+
+    fp = fopen("/proc/stat", "r");
+    fscanf(fp, "%*s %Lf %Lf %Lf %Lf", &b[0], &b[1], &b[2], &b[3]);
+    fclose(fp);
+
+    loadavg = ((b[0] + b[1] + b[2]) - (a[0] + a[1] + a[2])) / ((b[0] + b[1] + b[2] + b[3]) - (a[0] + a[1] + a[2] + a[3]));
+    loadavg *= 100;
+
+    return loadavg;
+}
+
+long get_memory_usage()
+{
+    FILE *fp;
+    char buf[BUF_SIZE];
+    long mem_usage;
+
+    /* Open the /proc/self/status file. */
+    fp = fopen("/proc/self/status", "r");
+    if (fp == NULL)
+    {
+        perror("Failed to open /proc/self/status");
+        return -1;
+    }
+
+    /* Read the entire contents. */
+    while (fgets(buf, BUF_SIZE, fp) != NULL)
+    {
+        /* The VmRSS value contains the resident set size, i.e., the portion of the process's memory that is held in RAM. */
+        if (strncmp(buf, "VmRSS:", 6) == 0)
         {
-            printf("tinyserver: body is empty\n");
-            return NULL;
+            sscanf(buf, "%*s %ld", &mem_usage);
+            break;
         }
-        // open the file in read mode to check if it exists and is not empty
-        save_file(request->data.file_path, request->data.body);
-        // send simple OK
-        send(request->connfd, "HTTP/1.1 200 OK\r\n\r\n", 19, 0);        
     }
 
-    else if (strcmp(request->data.method, "PUT") == 0)
-    {
-        printf("tinyserver: got PUT request\n");
-        // save_file(connfd, request.file_path);
-    }
-    else
-    {
-        printf("tinyserver: got unknown request\n");
-    }
+    fclose(fp);
 
-    close(request->connfd);
-    free(request);
+    return mem_usage; /* kB */
+}
+
+ThreadInfo thread_list[MAX_THREADS];
+int thread_count = 0;
+
+void *handle_client_wrapper(void *arg)
+{
+    /* Your existing code here... */
+
+    Http_client *client = (Http_client *)arg;
+    handle_client(client);
+    /* Update the thread status when finished. */
+    for (int i = 0; i < thread_count; i++)
+    {
+        if (pthread_equal(pthread_self(), thread_list[i].thread_id))
+        {
+            thread_list[i].status = 1;
+            break;
+        }
+    }
 
     return NULL;
 }
 
-void *handle_client_wrapper(void *arg)
+void printUsage(long mem_usage, long double cpu_usage)
 {
-    http_request *request = (http_request *)arg;
-    handle_client(request);
-    return NULL;
+    if (cpu_usage < 30)
+        printf("\033[32m"); // Set the text color to green
+    else if (cpu_usage < 60)
+        printf("\033[33m"); // Set the text color to yellow
+    else
+        printf("\033[31m"); // Set the text color to red
+
+    printf("CPU Usage: %.2Lf%%", cpu_usage);
+
+    printf("\033[0m"); // Reset the text color to default
+
+    if (mem_usage < 30)
+        printf("\033[32m"); // Set the text color to green
+    else if (mem_usage < 60)
+        printf("\033[33m"); // Set the text color to yellow
+    else
+        printf("\033[31m"); // Set the text color to red
+
+    printf(", Memory Usage: %ld kB", mem_usage);
+
+    printf("\033[0m"); // Reset the text color to default
 }
 
 int main(int argc, char *argv[])
 {
-    server tinyserver;
+    Http_server server;
+    int connection_count = 0;
+    strcpy(server.config.root_dir, argv[2]);
 
-    check_err((tinyserver.sockfd = socket(AF_INET, SOCK_STREAM, 0)), "Socket error");
+    check_err((server.sockfd = socket(AF_INET, SOCK_STREAM, 0)), "Socket error");
 
-    tinyserver.servaddr.sin_family = AF_INET;
-    tinyserver.servaddr.sin_addr.s_addr = INADDR_ANY;
-    tinyserver.servaddr.sin_port = htons(PORT);
+    server.server_addr.sin_family = AF_INET;
+    server.server_addr.sin_addr.s_addr = INADDR_ANY;
+    server.server_addr.sin_port = htons(PORT);
 
     int optval = 1;
-    check_err(setsockopt(tinyserver.sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)), "Setsockopt error");
+    check_err(setsockopt(server.sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)), "Setsockopt error");
 
-    check_err(bind(tinyserver.sockfd, (SA *)&tinyserver.servaddr, sizeof(tinyserver.servaddr)), "Bind error");
-    check_err(listen(tinyserver.sockfd, BACKLOG), "Listen error");
+    check_err(bind(server.sockfd, (SA *)&server.server_addr, sizeof(server.server_addr)), "Bind error");
+    check_err(listen(server.sockfd, BACKLOG), "Listen error");
 
-    // allow the same port to be used again
-    printf("tinyserver: waiting for connection on port %d...\n", ntohs(tinyserver.servaddr.sin_port));
-    printf("You can access it at: \033[32m\033[4mhttp://10.65.255.109:%d/index.html\033[0m\n", ntohs(tinyserver.servaddr.sin_port));
+    printf("Server: waiting for connection on port %d...\n", ntohs(server.server_addr.sin_port));
+    printf("You can access it at: \033[32m\033[4mhttp://10.65.255.109:%d/index.html\033[0m\n", ntohs(server.server_addr.sin_port));
 
     while (1)
     {
-        // tinyserver.addr_size = sizeof(SA_IN);
-        socklen_t addr_size = sizeof(tinyserver.cliaddr);
+        long double cpu_usage = get_cpu_usage();
+        long mem_usage = get_memory_usage();
 
-        http_request *client_req = malloc(sizeof(http_request));
+        Http_client *client = malloc(sizeof(Http_client));
+        socklen_t addr_size = sizeof(client->client_addr);
 
-        // check_err((tinyserver.http_req.connfd = accept(tinyserver.sockfd, (SA *)&tinyserver.cliaddr, &tinyserver.addr_size)), "Accept error");
-        check_err((client_req->connfd = accept(tinyserver.sockfd, (SA *)&tinyserver.cliaddr, &addr_size)), "Accept error");
+        check_err((client->connfd = accept(server.sockfd, (SA *)&client->client_addr, &addr_size)), "Accept error");
 
-        printf("tinyserver: got connection from %s\n", inet_ntoa(tinyserver.cliaddr.sin_addr));
+        printf("Server: got connection from %s\n", inet_ntoa(client->client_addr.sin_addr));
+        connection_count++;
+        printf("Server: connection count is %d\n", connection_count);
 
-        // handle request
-        pthread_t thread_id;
-        pthread_create(&thread_id, NULL, handle_client_wrapper, (void *)client_req);
-        pthread_detach(thread_id);
+        ThreadInfo *info = &thread_list[thread_count++];
+        pthread_create(&info->thread_id, NULL, handle_client_wrapper, (void *)client);
+        info->status = 0;
+        pthread_detach(info->thread_id);
 
-        // handle_client(tinyserver.http_req);
-        // close(tinyserver.connfd);
+        // printf("\rCPU Usage: %.2Lf%%, Memory Usage: %ld kB", cpu_usage, mem_usage);
+        printUsage(mem_usage, cpu_usage);
+
+        fflush(stdout);
+
+        printf("\nThreads:\n");
+        for (int i = 0; i < thread_count; i++)
+        {
+            printf("Thread %d:%ld %s\n", i, thread_list[i].thread_id, thread_list[i].status ? "Finished" : "Running");
+        }
     }
 
-    close(tinyserver.sockfd);
+    close(server.sockfd);
 
     return 0;
 }

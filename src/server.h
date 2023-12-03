@@ -22,60 +22,78 @@
 #include "cJSON.h"
 #include <sys/stat.h>
 #include <sys/sendfile.h>
+#include <netinet/tcp.h>
+#include <sys/times.h>
 
-#define MAXLINE 1024
-// max body size is 2MB
+#include <netinet/in.h>
+#include <stdbool.h>
+
+#define MAXLINE 4096
 #define MAX_BODY_SIZE 1000000
-#define PORT 7079
+#define MAX_HEADER_SIZE 100000
+#define PORT 7078
 #define BACKLOG 1000
+#define FAIL -1
+
+#define BUF_SIZE 1024
+#define MAX_THREADS 1024
 
 typedef struct sockaddr_in SA_IN;
 typedef struct sockaddr SA;
 
-typedef struct
-{
-    char content_type[MAXLINE];
-    char content_length[MAXLINE];
-    char content[MAX_BODY_SIZE];
-    char method[MAXLINE];
-    char file_path[MAXLINE];
+typedef enum {
+    HTTP_GET,
+    HTTP_POST,
+    HTTP_PUT
+    // Add more methods here as needed
+} http_method;
+
+typedef struct {
+    http_method method;
+    char url[MAXLINE];
     char body[MAX_BODY_SIZE];
-} request_data;
+    char file_path[MAXLINE];
+} Http_request;
 
-typedef struct
-{
-    int connfd;
-    request_data data;
-} http_request;
-
-typedef struct
-{
-    char content_type[MAXLINE];
-    char content_length[MAXLINE];
-    char last_modified[MAXLINE];
+typedef struct {
     char status_code[MAXLINE];
+    char content_type[MAXLINE];
+    int num_headers;
     char body[MAX_BODY_SIZE];
     char file_path[MAXLINE];
-} http_response;
+} Http_response;
 
-typedef struct
-{
-    bool enable_mt;
-    bool enable_cache;
+typedef struct {
+    int connfd;
+    SA_IN client_addr;
+    Http_request request;
+    // http_response response;
+} Http_client;
+
+typedef enum {
+    OFF,
+    ON
+} Switch_t;
+
+typedef struct {
+    Switch_t enable_mt;
+    Switch_t enable_cache;
     int num_threads;
     int max_queue_size;
     int max_cache_size;
     char root_dir[MAXLINE];
-} server_config;
+} Server_config;
 
-typedef struct
-{
+typedef struct {
     int sockfd;
-    SA_IN servaddr;
-    SA_IN cliaddr;
-    server_config config;
-} server;
+    SA_IN server_addr;
+    Server_config config;
+} Http_server;
 
-// main purpose of this is for the dashboard to customize the server spec
+typedef struct {
+    pthread_t thread_id;
+    int status;  /* 0 = running, 1 = finished */
+} ThreadInfo;
 
-#endif
+
+#endif /* MY_SHELL_H */
