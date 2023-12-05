@@ -24,14 +24,16 @@
 #include <sys/sendfile.h>
 #include <netinet/tcp.h>
 #include <sys/times.h>
+#include <sys/time.h>
 
 #include <netinet/in.h>
 #include <stdbool.h>
+#include <sys/resource.h>
 
 #define MAXLINE 4096
 #define MAX_BODY_SIZE 1000000
 #define MAX_HEADER_SIZE 100000
-#define PORT 7078
+#define PORT 7079
 #define BACKLOG 1000
 #define FAIL -1
 
@@ -50,9 +52,10 @@ typedef enum {
 
 typedef struct {
     http_method method;
-    char url[MAXLINE];
+    char header[MAX_HEADER_SIZE];
     char body[MAX_BODY_SIZE];
     char file_path[MAXLINE];
+    char connection[MAXLINE];
 } Http_request;
 
 typedef struct {

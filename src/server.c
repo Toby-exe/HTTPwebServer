@@ -231,10 +231,7 @@ void send_response(int connfd, Http_response response)
     strcat(http_header, "\r\n");
     strcat(http_header, "Content-Type: ");
     strcat(http_header, response.content_type);
-    strcat(http_header, "\r\n\n");
-
-    // send the response header to the client
-    send(connfd, http_header, strlen(http_header), 0);
+    strcat(http_header, "\r\n");
 
     // get the size of the file
     struct stat stat_buf;
@@ -243,6 +240,17 @@ void send_response(int connfd, Http_response response)
         printf("Error getting file size\n");
         return;
     }
+
+    // Add Content-Length to the header
+    char content_length[50];
+    sprintf(content_length, "Content-Length: %ld\r\n", stat_buf.st_size);
+    strcat(http_header, content_length);
+
+    // End the headers with an empty line
+    strcat(http_header, "\r\n");
+
+    // send the response header to the client
+    send(connfd, http_header, strlen(http_header), 0);
 
     // send the file
     ssize_t sent_bytes = sendfile(connfd, fd, NULL, stat_buf.st_size);
@@ -345,11 +353,11 @@ Http_request parse_Http_request(char *request)
             // now `body` contains the body of the request
             strcpy(req.body, body);
         }
-    }
-    else
-    {
-        strcpy(req.body, "");
-        printf("Error parsing body\n");
+        else
+        {
+            strcpy(req.body, "");
+            printf("Error parsing body\n");
+        }
     }
 
     // next we need to determine the file path
@@ -450,6 +458,33 @@ void *handle_client(Http_client *client)
     return 0;
 }
 
+time_t get_last_modified_time(const char *path)
+{
+    struct stat attr;
+    if (stat(path, &attr) == 0)
+    {
+        return attr.st_mtime;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+int file_has_changed(const char *path, time_t *last_modified_time)
+{
+    time_t current_modified_time = get_last_modified_time(path);
+    if (current_modified_time != *last_modified_time)
+    {
+        *last_modified_time = current_modified_time;
+        return 1;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
 // void *handle_client_wrapper(void *arg)
 // {
 //     Http_client *client = (Http_client *)arg;
@@ -457,26 +492,6 @@ void *handle_client(Http_client *client)
 
 //     return NULL;
 // }
-
-long double get_cpu_usage()
-{
-    FILE *fp;
-    long double a[4], b[4], loadavg;
-
-    fp = fopen("/proc/stat", "r");
-    fscanf(fp, "%*s %Lf %Lf %Lf %Lf", &a[0], &a[1], &a[2], &a[3]);
-    fclose(fp);
-    sleep(1);
-
-    fp = fopen("/proc/stat", "r");
-    fscanf(fp, "%*s %Lf %Lf %Lf %Lf", &b[0], &b[1], &b[2], &b[3]);
-    fclose(fp);
-
-    loadavg = ((b[0] + b[1] + b[2]) - (a[0] + a[1] + a[2])) / ((b[0] + b[1] + b[2] + b[3]) - (a[0] + a[1] + a[2] + a[3]));
-    loadavg *= 100;
-
-    return loadavg;
-}
 
 long get_memory_usage()
 {
@@ -530,30 +545,42 @@ void *handle_client_wrapper(void *arg)
     return NULL;
 }
 
-void printUsage(long mem_usage, long double cpu_usage)
+double calculate_cpu_usage()
 {
-    if (cpu_usage < 30)
-        printf("\033[32m"); // Set the text color to green
-    else if (cpu_usage < 60)
-        printf("\033[33m"); // Set the text color to yellow
-    else
-        printf("\033[31m"); // Set the text color to red
+    struct rusage usage;
+    struct timeval start, end;
+    long sec, usec;
+    double cpu_time, wall_time;
 
-    printf("CPU Usage: %.2Lf%%", cpu_usage);
+    // Get the number of CPU cores
+    int num_cores = sysconf(_SC_NPROCESSORS_ONLN);
 
-    printf("\033[0m"); // Reset the text color to default
+    // Get the start time
+    getrusage(RUSAGE_SELF, &usage);
+    start = usage.ru_utime;
 
-    if (mem_usage < 30)
-        printf("\033[32m"); // Set the text color to green
-    else if (mem_usage < 60)
-        printf("\033[33m"); // Set the text color to yellow
-    else
-        printf("\033[31m"); // Set the text color to red
+    // TODO: Insert the code you want to measure here
 
-    printf(", Memory Usage: %ld kB", mem_usage);
+    // Get the end time
+    getrusage(RUSAGE_SELF, &usage);
+    end = usage.ru_utime;
 
-    printf("\033[0m"); // Reset the text color to default
+    // Calculate the CPU time (in seconds)
+    sec = end.tv_sec - start.tv_sec;
+    usec = end.tv_usec - start.tv_usec;
+    cpu_time = sec + usec / 1e6;
+
+    // Calculate the wall time (in seconds)
+    // TODO: Replace this with the actual wall time
+    wall_time = 1.0;
+
+    // Calculate the CPU usage
+    double cpu_usage = cpu_time / num_cores / wall_time * 100;
+
+    return cpu_usage;
 }
+
+// https://stackoverflow.com/questions/8501706/how-to-get-the-cpu-usage-in-c - this helped with figuring out how to get the CPU usage
 
 int main(int argc, char *argv[])
 {
@@ -578,11 +605,21 @@ int main(int argc, char *argv[])
 
     while (1)
     {
-        long double cpu_usage = get_cpu_usage();
-        long mem_usage = get_memory_usage();
 
         Http_client *client = malloc(sizeof(Http_client));
         socklen_t addr_size = sizeof(client->client_addr);
+        struct rusage usage;
+        struct timeval start, end, wall_start, wall_end;
+        long sec, usec;
+        double cpu_time, wall_time;
+
+        // Get the number of CPU cores
+        int num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+
+        // Get the start time
+        getrusage(RUSAGE_SELF, &usage);
+        start = usage.ru_utime;
+        gettimeofday(&wall_start, NULL); // Get the wall start time
 
         check_err((client->connfd = accept(server.sockfd, (SA *)&client->client_addr, &addr_size)), "Accept error");
 
@@ -595,16 +632,31 @@ int main(int argc, char *argv[])
         info->status = 0;
         pthread_detach(info->thread_id);
 
-        // printf("\rCPU Usage: %.2Lf%%, Memory Usage: %ld kB", cpu_usage, mem_usage);
-        printUsage(mem_usage, cpu_usage);
-
         fflush(stdout);
 
-        printf("\nThreads:\n");
-        for (int i = 0; i < thread_count; i++)
-        {
-            printf("Thread %d:%ld %s\n", i, thread_list[i].thread_id, thread_list[i].status ? "Finished" : "Running");
-        }
+        // printf("\nThreads:\n");
+        // for (int i = 0; i < thread_count; i++)
+        // {
+        //     printf("Thread %d:%ld %s\n", i, thread_list[i].thread_id, thread_list[i].status ? "Finished" : "Running");
+        // }
+        // Get the end time
+        getrusage(RUSAGE_SELF, &usage);
+        end = usage.ru_utime;
+        gettimeofday(&wall_end, NULL); // Get the wall end time
+
+        // Calculate the CPU time (in seconds)
+        sec = end.tv_sec - start.tv_sec;
+        usec = end.tv_usec - start.tv_usec;
+        cpu_time = sec + usec / 1e6;
+
+        // Calculate the wall time (in seconds)
+        wall_time = (wall_end.tv_sec - wall_start.tv_sec) + (wall_end.tv_usec - wall_start.tv_usec) / 1e6;
+
+        // Calculate the CPU usage
+        double cpu_usage = cpu_time / num_cores / wall_time * 100;
+        long mem_usage = get_memory_usage();
+        printf("CPU Usage: %.2lf%%\n", cpu_usage);
+        printf("Memory Usage: %ld kB\n", mem_usage);
     }
 
     close(server.sockfd);
