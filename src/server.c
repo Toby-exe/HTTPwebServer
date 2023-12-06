@@ -8,14 +8,6 @@ void check_err(int val, char *msg)
     }
 }
 
-void init(Http_response *response)
-{
-
-    strcpy(response->content_type, "");
-    strcpy(response->body, "");
-    strcpy(response->file_path, "");
-}
-
 char *get_mime_type(char *type)
 {
     // remove everything up to and including '.' from file name
@@ -64,434 +56,303 @@ char *get_mime_type(char *type)
     }
 }
 
-char *get_file(char *file_path)
+bool file_exists(char *path, char *root_dir)
 {
-    // get file from disk
-    FILE *fp;
-    char file_path_with_dir[1024] = "../public/";
-    strcat(file_path_with_dir, file_path);
-    fp = fopen(file_path_with_dir, "r");
+    char full_path[BUF_SIZE];
+    strcpy(full_path, root_dir);
+    strcat(full_path, path);
 
-    if (fp == NULL)
+    printf("checking if file exists at: %s\n", full_path);
+
+    if (access(full_path, F_OK) == -1)
     {
-        printf("Error opening file\n");
-        return NULL;
-    }
-
-    static char file_data[MAX_BODY_SIZE] = "";
-
-    memset(file_data, 0, sizeof(file_data)); // this is to stop the file_data from appending to itself
-
-    char line[1024];
-    while (fgets(line, sizeof(line), fp) != NULL)
-    {
-        if (strlen(file_data) + strlen(line) + 1 > sizeof(file_data))
-        {
-            fprintf(stderr, "File buffer size exceeded\n");
-            break;
-        }
-        strcat(file_data, line);
-    }
-
-    fclose(fp);
-
-    return file_data;
-}
-
-int save_file(char *file_path, const char *data)
-{
-    FILE *fp;
-    char file_path_with_dir[1024] = "../public/";
-    strcat(file_path_with_dir, file_path);
-    fp = fopen(file_path_with_dir, "w");
-
-    if (fp == NULL)
-    {
-        printf("Error opening file\n");
-        return -1;
-    }
-
-    fputs(data, fp);
-    fclose(fp);
-
-    return 0;
-}
-
-/**
- * @brief Save a JSON object to a file
- *
- * This function takes a file path and a JSON string as input and appends the
- * JSON object to an existing or new JSON array in the file. It uses the cJSON
- * library to parse and print JSON data.
- *
- * @param[in] file_path The relative path of the file to save the JSON object to
- * @param[in] data The JSON string to be saved
- * @return 0 if the operation was successful, -1 otherwise
- */
-int save_json(char *file_path, const char *data)
-{
-    FILE *fp;
-    char file_path_with_dir[1024] = "../public/";
-    strcat(file_path_with_dir, file_path);
-    fp = fopen(file_path_with_dir, "r");
-    cJSON *json;
-
-    if (fp == NULL)
-    {
-        // if the file doesn't exist, create a new json array
-        json = cJSON_CreateArray();
+        printf("File does not exist\n");
+        return false;
     }
     else
     {
-        // if the file exists, read its content
-        char buffer[MAX_BODY_SIZE];
-        size_t bytes_read = fread(buffer, 1, MAX_BODY_SIZE, fp);
-        fclose(fp);
-
-        if (bytes_read == 0)
-        {
-            // if the file is empty, create a new json array
-            json = cJSON_CreateArray();
-        }
-        else
-        {
-            // if the file is not empty, parse the existing json array
-            json = cJSON_Parse(buffer);
-        }
+        return true;
     }
-
-    // create a new json object from the request body
-    cJSON *new_object = cJSON_Parse(data);
-
-    // add the new object to the json array
-    cJSON_AddItemToArray(json, new_object);
-
-    printf("tinyserver: json is %s\n", cJSON_Print(json));
-
-    // write the updated json array back to the file
-    fp = fopen(file_path_with_dir, "w");
-    if (fp == NULL)
-    {
-        printf("Error opening file\n");
-        return -1;
-    }
-    char *json_string = cJSON_Print(json);
-    fputs(json_string, fp);
-    free(json_string);
-    cJSON_Delete(json);
-    fclose(fp);
-
-    return 0;
 }
 
-/**
- * @brief Sends an HTTP response to a client.
- *
- * This function builds an HTTP response header and sends it to the client,
- * followed by the contents of a file. It uses the TCP_CORK option to minimize
- * the number of packets sent and to tune performance. This is useful when
- * sending a small amount of header data in front of the file contents. - For
- * more see NOTES section for sendfile(2).
- *
- * @param connfd The file descriptor of the connection to the client.
- * @param response The Http_response struct containing the details of the response.
- *
- * @return void
- */
-void send_response(int connfd, Http_response response)
+void parse_field(char *src, char *des, const char *field)
 {
-    // Enable TCP_CORK
-    int cork = 1;
-    setsockopt(connfd, IPPROTO_TCP, TCP_CORK, &cork, sizeof(cork));
-
-    // open the file
-    int fd = open(response.file_path, O_RDONLY);
-    if (fd == -1)
+    char *start, *end;
+    // Find the field in the source string
+    start = strstr(src, field);
+    if (start == NULL)
     {
-        printf("Error opening file\n");
-        strcpy(response.status_code, "404 File Not Found");
-        strcpy(response.content_type, "text/html");
-
-        // Try to open the 404.html file
-        fd = open("../public/404.html", O_RDONLY);
-        if (fd == -1)
-        {
-            printf("Error opening 404.html file\n");
-            return;
-        }
-    }
-    else
-    {
-        strcpy(response.status_code, "200 OK");
-    }
-
-    // build response header
-    char http_header[MAX_HEADER_SIZE] = "HTTP/1.1 ";
-    strcat(http_header, response.status_code);
-    strcat(http_header, "\r\n");
-    strcat(http_header, "Content-Type: ");
-    strcat(http_header, response.content_type);
-    strcat(http_header, "\r\n");
-
-    // get the size of the file
-    struct stat stat_buf;
-    if (fstat(fd, &stat_buf) == -1)
-    {
-        printf("Error getting file size\n");
+        printf("Field not found.\n");
         return;
     }
 
-    // Add Content-Length to the header
-    char content_length[50];
-    sprintf(content_length, "Content-Length: %ld\r\n", stat_buf.st_size);
-    strcat(http_header, content_length);
+    // Skip the field and the following colon and space
+    start += strlen(field) + 2;
 
-    // End the headers with an empty line
-    strcat(http_header, "\r\n");
-
-    // send the response header to the client
-    send(connfd, http_header, strlen(http_header), 0);
-
-    // send the file
-    ssize_t sent_bytes = sendfile(connfd, fd, NULL, stat_buf.st_size);
-    if (sent_bytes == -1)
+    // Find the end of the field value
+    end = strchr(start, '\n');
+    if (end == NULL)
     {
-        printf("Error sending file\n");
-        return;
+        end = src + strlen(src);
     }
 
-    // close the file
-    close(fd);
-
-    // Disable TCP_CORK
-    cork = 0;
-    setsockopt(connfd, IPPROTO_TCP, TCP_CORK, &cork, sizeof(cork));
-
-    return;
+    // Copy the field value to the destination string
+    strncpy(des, start, end - start);
+    des[end - start] = '\0'; // Null terminate the destination string
 }
 
-int http_get_hndlr(int connfd, Http_request req)
+int handle_http_request(const int connfd, Http_request_header *req_header)
 {
-    Http_response new_response;
 
-    if (strcmp(req.file_path, "") == 0)
-    {
-        printf("tinyserver: file path is empty\n");
-        return -1;
-    }
+    memset(req_header, 0, sizeof(Http_request_header));
 
-    printf("GOT THIS FAR\n");
-
-    char *mime_type = get_mime_type(req.file_path);
-    char file_path_with_dir[4096] = "../public/";
-
-    init(&new_response);
-
-    strcpy(new_response.body, req.body);
-    strcpy(new_response.content_type, mime_type);
-    strcat(file_path_with_dir, req.file_path);
-    strcpy(new_response.file_path, file_path_with_dir);
-
-    send_response(connfd, new_response);
-
-    return 0;
-}
-
-int http_post_hndlr(int connfd, Http_request req)
-{
-    if (strcmp(req.body, "") == 0)
-    {
-        printf("tinyserver: body is empty\n");
-        return -1;
-    }
-    if (strcmp(req.file_path, "") == 0)
-    {
-        printf("tinyserver: file path is empty\n");
-        return -1;
-    }
-
-    char *mime_type = get_mime_type(req.file_path);
-
-    if (strcmp(mime_type, "application/json") == 0)
-    {
-        save_json(req.file_path, req.body);
-    }
-    else
-    {
-        save_file(req.file_path, req.body);
-    }
-
-    // send simple OK
-    send(connfd, "HTTP/1.1 200 OK\r\n\r\n", 19, 0);
-
-    return 0;
-}
-
-Http_request parse_Http_request(char *request)
-{
-    Http_request req;
-    regex_t regex;
-    regmatch_t pmatch[2]; // only need 1 match for file path
-    int match;
-
-    // first we need to determine the method (GET or POST)
-    match = regcomp(&regex, "^GET", 0); // ^ means start of string
-    match = regexec(&regex, request, 0, NULL, 0);
-    if (match == 0)
-        req.method = HTTP_GET;
-    match = regcomp(&regex, "^POST", 0);
-    match = regexec(&regex, request, 0, NULL, 0);
-    if (match == 0)
-    {
-        req.method = HTTP_POST;
-        // right after the two new lines is the body of the request
-        char *body_start = strstr(request, "\r\n\r\n");
-        if (body_start != NULL)
-        {
-            body_start += 4; // skip past the "\r\n\r\n"
-            char *body = strdup(body_start);
-            // now `body` contains the body of the request
-            strcpy(req.body, body);
-        }
-        else
-        {
-            strcpy(req.body, "");
-            printf("Error parsing body\n");
-        }
-    }
-
-    // next we need to determine the file path
-    match = regcomp(&regex, " (/[^ ]*)", REG_EXTENDED);
-    match = regexec(&regex, request, 2, pmatch, 0);
-    pmatch[0].rm_so = 0;
-    if (match == 0)
-    {
-        int start = pmatch[1].rm_so;
-        int end = pmatch[1].rm_eo;
-        strncpy(req.file_path, &request[start + 1], end - start - 1); // +1 to skip the first '/' character
-        req.file_path[end - start - 1] = '\0';                        // null terminate the string
-    }
-    else
-    {
-        strcpy(req.file_path, "");
-        printf("Error parsing file path\n");
-    }
-
-    regfree(&regex);
-
-    return req;
-}
-
-int read_request(int connfd, char *buffer, size_t buffer_size)
-{
-    ssize_t bytes_read = recv(connfd, buffer, buffer_size - 1, 0);
-    printf("tinyserver: bytes read: %ld\n", bytes_read);
+    ssize_t bytes_read = recv(connfd, req_header->buffer, MAX_HEADER_SIZE, 0);
     if (bytes_read < 0)
     {
-        printf("recv failed\n");
+        printf("Error reading from socket\n");
         return -1;
     }
-    else if (bytes_read == 0)
+    if (bytes_read < 3)
     {
-        printf("tinyserver: client disconnected\n");
+        printf("Invalid request\n");
         return -1;
     }
-    buffer[bytes_read] = '\0';
+    req_header->buffer[bytes_read] = '\0';
+
+    printf("Request header:\n%s\n", req_header->buffer);
+
+    // see what the request is (GET, POST, etc)
+    regex_t regex;
+    regmatch_t pmatch[3]; // only need 1 match for file path
+    int match;
+
+    // ^ means start of string
+    match = regcomp(&regex, "^GET", 0);
+    match = regexec(&regex, req_header->buffer, 2, pmatch, 0);
+    if (match == 0)
+    {
+        req_header->method = HTTP_GET;
+    }
+
+    match = regcomp(&regex, "^POST", 0);
+    match = regexec(&regex, req_header->buffer, 2, pmatch, 0);
+    if (match == 0)
+    {
+        req_header->method = HTTP_POST;
+    }
+    // TODO: get body of POST request
+
+    match = regcomp(&regex, "^(GET|POST) ([^ ]*) HTTP", REG_EXTENDED);
+    if (match != 0)
+    {
+        printf("Error compiling regex\n");
+        return -1;
+    }
+
+    // Execute the regular expression
+    match = regexec(&regex, req_header->buffer, 3, pmatch, 0);
+    if (match != 0)
+    {
+        printf("Error executing regex\n");
+        return -1;
+    }
+
+    // Extract the path from the request line
+    size_t path_length = pmatch[2].rm_eo - pmatch[2].rm_so;
+    strncpy(req_header->path, req_header->buffer + pmatch[2].rm_so, path_length);
+    req_header->path[path_length] = '\0'; // Null-terminate the path
+
+    // Clean up
+    regfree(&regex);
+
+    parse_field(req_header->buffer, req_header->host, "Host");
 
     return 0;
 }
 
-void *handle_client(Http_client *client)
+void serve_request(const int connfd, Http_request_header req_header, Http_response_header res_header, Server_config server_config)
 {
-    /*DEBUG*/
-    printf("\n\033[32m##############################################\n");
-    printf("\033[0m");
+    // print thread id in yellow
+    printf("\033[33mThread %ld\033[0m\n", pthread_self());
 
-    printf("tinyserver: THIS IS THE START OF A NEW REQUEST\n");
-    pthread_t thread_id = pthread_self();
-    printf("tinyserver: \033[33mthread id: %ld\033[0m\n", thread_id);
+    char response[MAX_HEADER_SIZE];
+    char file_path[256];
+    struct stat file_stat;
+    int fd;
+    memset(&res_header.content_type, 0, sizeof(res_header.content_type));
+    res_header.content_type = get_mime_type(req_header.path);
+    memset(response, 0, sizeof(response));
+    memset(file_path, 0, sizeof(file_path));
+    // Construct the file path
+    snprintf(file_path, sizeof(file_path), "%s%s", server_config.root_dir, req_header.path);
 
-    // read request from client
-    char buffer[4096];
-    if (read_request(client->connfd, buffer, sizeof(buffer)) == FAIL)
+    printf("Serving file: %s\n", file_path);
+    // Open the file
+    fd = open(file_path, O_RDONLY);
+    if (fd == -1)
     {
-        printf("tinyserver: reading request failed\n");
-        // close(client->connfd);
-        // free(client);
-        return NULL;
-    }
-    /*DEBUG*/
-    printf("tinyserver: buffer contents are:\n\033[36m%s\n\033[0m", buffer);
-
-    client->request = parse_Http_request(buffer);
-
-    // print everything in the request
-    printf("tinyserver: method is %d\n", client->request.method);
-    printf("tinyserver: file path is %s\n", client->request.file_path);
-    printf("tinyserver: body is %s\n", client->request.body);
-
-    switch (client->request.method)
-    {
-    case HTTP_GET:
-        printf("tinyserver: method is GET\n");
-        check_err(http_get_hndlr(client->connfd, client->request), "Error handling GET request");
-        break;
-    case HTTP_POST:
-        printf("tinyserver: method is POST\n");
-        check_err(http_post_hndlr(client->connfd, client->request), "Error handling POST request");
-        break;
-    case HTTP_PUT:
-        printf("tinyserver: method is PUT\n");
-        break;
-    default:
-        printf("tinyserver: method is unknown\n");
-        break;
+        perror("open");
+        return;
     }
 
-    close(client->connfd);
-    // free(client);
+    // Get file stats
+    if (fstat(fd, &file_stat) < 0)
+    {
+        perror("fstat");
+        return;
+    }
 
-    printf("tinyserver: THIS IS THE END OF A NEW REQUEST\n");
-    printf("\033[32m##############################################\n\n\n");
-    printf("\033[0m");
+    // Construct the response header
+    snprintf(response, sizeof(response),
+             "HTTP/1.1 %s %s\r\n"
+             "Content-Length: %ld\r\n"
+             "Content-Type: %s\r\n"
+             //  "Connection: %s\r\n"
+             "%s\r\n",
+             res_header.status_code, res_header.status_message,
+             file_stat.st_size,
+             res_header.content_type,
+             //  res_header.connection,
+             res_header.additional_headers);
 
-    return 0;
+    printf("Response header:\n%s\n", response);
+
+    // Send the response header
+    if (send(connfd, response, strlen(response), 0) == -1)
+    {
+        perror("send");
+        return;
+    }
+
+    // Send the file
+    if (sendfile(connfd, fd, NULL, file_stat.st_size) == -1)
+    {
+        perror("sendfile");
+        return;
+    }
+
+    // Close the file
+    close(fd);
 }
 
-time_t get_last_modified_time(const char *path)
+void handle_client(Http_client *client, Server_config server_config)
 {
-    struct stat attr;
-    if (stat(path, &attr) == 0)
+    Http_response_header res_header;
+    bool keep_alive = false;
+    fd_set set;
+    struct timeval timeout;
+
+    memset(&res_header, 0, sizeof(res_header));
+    res_header.status_code = "200";
+    res_header.status_message = "OK";
+    res_header.additional_headers = "Keep-Alive: timeout=10\r\nServer: tinyserver\r\n";
+    res_header.connection = "close";
+
+    do
     {
-        return attr.st_mtime;
-    }
-    else
-    {
-        return 0;
-    }
+        // Initialize the file descriptor set.
+        FD_ZERO(&set);
+        FD_SET(client->connfd, &set);
+
+        // Initialize the timeout data structure.
+        timeout.tv_sec = 10;
+        timeout.tv_usec = 0;
+
+        // select returns 0 if timeout, 1 if input available, -1 if error.
+        switch (select(FD_SETSIZE, &set, NULL, NULL, &timeout))
+        {
+        case -1:
+            perror("select");
+            close(client->connfd);
+            return;
+        case 0:
+            printf("Timeout, closing connection\n");
+            close(client->connfd);
+            return;
+        default:
+            Http_request_header req_header;
+
+            if (handle_http_request(client->connfd, &req_header) == -1)
+            {
+                printf("client closed connection or timeout\n");
+                close(client->connfd);
+                return;
+            }
+            printf("Request method: %d\n", req_header.method);
+            printf("Request path: %s\n", req_header.path);
+            printf("Request host: %s\n", req_header.host);
+            parse_field(req_header.buffer, req_header.connection, "Connection");
+            printf("Request connection: %s\n", req_header.connection);
+
+            // check if the connection is keep-alive
+            if (strncmp(req_header.connection, "keep-alive", 10) == 0)
+            {
+                keep_alive = true;
+                res_header.connection = "keep-alive";
+                printf("Connection is keep-alive\n");
+            }
+            else
+            {
+                keep_alive = false;
+                res_header.connection = "close";
+                printf("Connection is close\n");
+            }
+
+            // now it is time to serve the request (respond)
+            if (req_header.method == HTTP_GET)
+            {
+                printf("GET request\n");
+
+                // check if target file exists
+                if (file_exists(req_header.path, server_config.root_dir))
+                {
+                    printf("File exists\n");
+                    serve_request(client->connfd, req_header, res_header, server_config);
+                }
+                else
+                {
+                    printf("404 file not found\n");
+                    // serve_request_404(client->connfd, req_header, res_header, server_config);
+                }
+                // serve_request(client->connfd, req_header, res_header, server_config);
+            }
+
+            // If the connection is not keep-alive, or an error occurred, break the loop
+            if (!keep_alive || client->connfd == -1)
+            {
+                break;
+            }
+        }
+    } while (keep_alive);
 }
 
-int file_has_changed(const char *path, time_t *last_modified_time)
+ThreadInfo thread_list[MAX_THREADS];
+int thread_count = 0;
+
+void *handle_client_wrapper(void *arg)
 {
-    time_t current_modified_time = get_last_modified_time(path);
-    if (current_modified_time != *last_modified_time)
+    Thread_args *args = (Thread_args *)arg;
+    Http_client *client = args->client;
+    Server_config *server_config = args->server_config;
+
+    handle_client(client, *server_config);
+    printf("left handle_client\n");
+
+    /* Update the thread status when finished. */
+    for (int i = 0; i < thread_count; i++)
     {
-        *last_modified_time = current_modified_time;
-        return 1;
+        if (pthread_equal(pthread_self(), thread_list[i].thread_id))
+        {
+            thread_list[i].status = 1;
+            break;
+        }
     }
-    else
-    {
-        return 0;
-    }
+
+    printf("about to free args\n");
+    free(args); // Don't forget to free the memory when you're done
+
+    return NULL;
 }
-
-// void *handle_client_wrapper(void *arg)
-// {
-//     Http_client *client = (Http_client *)arg;
-//     handle_client(client);
-
-//     return NULL;
-// }
 
 long get_memory_usage()
 {
@@ -521,28 +382,6 @@ long get_memory_usage()
     fclose(fp);
 
     return mem_usage; /* kB */
-}
-
-ThreadInfo thread_list[MAX_THREADS];
-int thread_count = 0;
-
-void *handle_client_wrapper(void *arg)
-{
-    /* Your existing code here... */
-
-    Http_client *client = (Http_client *)arg;
-    handle_client(client);
-    /* Update the thread status when finished. */
-    for (int i = 0; i < thread_count; i++)
-    {
-        if (pthread_equal(pthread_self(), thread_list[i].thread_id))
-        {
-            thread_list[i].status = 1;
-            break;
-        }
-    }
-
-    return NULL;
 }
 
 double calculate_cpu_usage()
@@ -602,6 +441,7 @@ int main(int argc, char *argv[])
 
     printf("Server: waiting for connection on port %d...\n", ntohs(server.server_addr.sin_port));
     printf("You can access it at: \033[32m\033[4mhttp://10.65.255.109:%d/index.html\033[0m\n", ntohs(server.server_addr.sin_port));
+    printf("root dir: %s\n", server.config.root_dir);
 
     while (1)
     {
@@ -628,11 +468,16 @@ int main(int argc, char *argv[])
         printf("Server: connection count is %d\n", connection_count);
 
         ThreadInfo *info = &thread_list[thread_count++];
-        pthread_create(&info->thread_id, NULL, handle_client_wrapper, (void *)client);
+        Thread_args *args = malloc(sizeof(Thread_args));
+
+        args->client = client;
+        args->server_config = &server.config;
+
+        pthread_create(&info->thread_id, NULL, handle_client_wrapper, (void *)args);
+        printf("got back to main\n");
         info->status = 0;
         pthread_detach(info->thread_id);
-
-        fflush(stdout);
+        // handle_client(client, server.config);
 
         // printf("\nThreads:\n");
         // for (int i = 0; i < thread_count; i++)

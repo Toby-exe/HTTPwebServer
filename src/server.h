@@ -33,12 +33,14 @@
 #define MAXLINE 4096
 #define MAX_BODY_SIZE 1000000
 #define MAX_HEADER_SIZE 100000
-#define PORT 7079
+#define PORT 7078
 #define BACKLOG 1000
 #define FAIL -1
 
 #define BUF_SIZE 1024
 #define MAX_THREADS 1024
+
+#define METHOD_SZ 8
 
 typedef struct sockaddr_in SA_IN;
 typedef struct sockaddr SA;
@@ -73,6 +75,26 @@ typedef struct {
     // http_response response;
 } Http_client;
 
+
+// NEW STUFF **********
+typedef struct {
+    http_method method;
+    char path[128];
+    char version[16];
+    char buffer[MAX_HEADER_SIZE];
+    char host[64];
+    char connection[64];
+} Http_request_header;
+
+typedef struct {
+    char *status_code;
+    char *content_type;
+    char *connection;
+    char *status_message;
+    char *additional_headers;
+} Http_response_header;
+////***************
+
 typedef enum {
     OFF,
     ON
@@ -84,8 +106,13 @@ typedef struct {
     int num_threads;
     int max_queue_size;
     int max_cache_size;
-    char root_dir[MAXLINE];
+    char root_dir[128];
 } Server_config;
+
+typedef struct {
+    Http_client *client;
+    Server_config *server_config;
+} Thread_args;
 
 typedef struct {
     int sockfd;
