@@ -8,6 +8,92 @@ void check_err(int val, char *msg)
     }
 }
 
+int save_file(char *file_path, const char *data)
+{
+    FILE *fp;
+    char file_path_with_dir[1024] = "../public";
+    strcat(file_path_with_dir, file_path);
+    fp = fopen(file_path_with_dir, "w");
+
+    if (fp == NULL)
+    {
+        printf("Error opening file\n");
+        return -1;
+    }
+
+    fputs(data, fp);
+    fclose(fp);
+
+    return 0;
+}
+
+/**
+ * @brief Save a JSON object to a file
+ *
+ * This function takes a file path and a JSON string as input and appends the
+ * JSON object to an existing or new JSON array in the file. It uses the cJSON
+ * library to parse and print JSON data.
+ *
+ * @param[in] file_path The relative path of the file to save the JSON object to
+ * @param[in] data The JSON string to be saved
+ * @return 0 if the operation was successful, -1 otherwise
+ */
+int save_json(char *file_path, const char *data)
+{
+    FILE *fp;
+    char file_path_with_dir[1024] = "../public";
+    strcat(file_path_with_dir, file_path);
+    fp = fopen(file_path_with_dir, "r");
+    cJSON *json;
+
+    if (fp == NULL)
+    {
+        // if the file doesn't exist, create a new json array
+        json = cJSON_CreateArray();
+    }
+    else
+    {
+        // if the file exists, read its content
+        char buffer[MAX_BODY_SIZE];
+        size_t bytes_read = fread(buffer, 1, MAX_BODY_SIZE, fp);
+        fclose(fp);
+
+        if (bytes_read == 0)
+        {
+            // if the file is empty, create a new json array
+            json = cJSON_CreateArray();
+        }
+        else
+        {
+            // if the file is not empty, parse the existing json array
+            json = cJSON_Parse(buffer);
+        }
+    }
+
+    // create a new json object from the request body
+    cJSON *new_object = cJSON_Parse(data);
+
+    // add the new object to the json array
+    cJSON_AddItemToArray(json, new_object);
+
+    printf("tinyserver: json is %s\n", cJSON_Print(json));
+
+    // write the updated json array back to the file
+    fp = fopen(file_path_with_dir, "w");
+    if (fp == NULL)
+    {
+        printf("Error opening file\n");
+        return -1;
+    }
+    char *json_string = cJSON_Print(json);
+    fputs(json_string, fp);
+    free(json_string);
+    cJSON_Delete(json);
+    fclose(fp);
+
+    return 0;
+}
+
 char *get_mime_type(char *type)
 {
     // remove everything up to and including '.' from file name
@@ -139,8 +225,21 @@ int handle_http_request(const int connfd, Http_request_header *req_header)
     if (match == 0)
     {
         req_header->method = HTTP_POST;
+
+        char *body_start = strstr(req_header->buffer, "\r\n\r\n");
+        if (body_start != NULL)
+        {
+            body_start += 4; // skip past the "\r\n\r\n"
+            char *body = strdup(body_start);
+            // now `body` contains the body of the request
+            strcpy(req_header->body, body);
+        }
+        else
+        {
+            strcpy(req_header->body, " ");
+            printf("Error parsing body\n");
+        }
     }
-    // TODO: get body of POST request
 
     match = regcomp(&regex, "^(GET|POST) ([^ ]*) HTTP", REG_EXTENDED);
     if (match != 0)
@@ -172,34 +271,130 @@ int handle_http_request(const int connfd, Http_request_header *req_header)
 
 void serve_request(const int connfd, Http_request_header req_header, Http_response_header res_header, Server_config server_config)
 {
-    // print thread id in yellow
-    printf("\033[33mThread %ld\033[0m\n", pthread_self());
+    // create state machine either in serve file or server dir
+    enum state
+    {
+        SERVE_FILE,
+        SERVE_DIR
+    };
 
+    enum state current_state = SERVE_FILE;
+    // print thread id in yellow
     char response[MAX_HEADER_SIZE];
     char file_path[256];
     struct stat file_stat;
     int fd;
+    long file_size = 0;
+    char *page_buffer;
+
     memset(&res_header.content_type, 0, sizeof(res_header.content_type));
-    res_header.content_type = get_mime_type(req_header.path);
     memset(response, 0, sizeof(response));
     memset(file_path, 0, sizeof(file_path));
-    // Construct the file path
-    snprintf(file_path, sizeof(file_path), "%s%s", server_config.root_dir, req_header.path);
 
-    printf("Serving file: %s\n", file_path);
-    // Open the file
-    fd = open(file_path, O_RDONLY);
-    if (fd == -1)
+    printf("inside serve_request\n");
+
+    // Construct the full path
+    char full_path[4096]; // Adjust size as needed
+    snprintf(full_path, sizeof(full_path), "%s%s", server_config.root_dir, req_header.path);
+
+    // Get file or directory information
+    struct stat path_stat;
+    if (stat(full_path, &path_stat) == -1)
     {
-        perror("open");
+        perror("stat");
         return;
     }
 
-    // Get file stats
-    if (fstat(fd, &file_stat) < 0)
+    if (S_ISDIR(path_stat.st_mode))
     {
-        perror("fstat");
-        return;
+        current_state = SERVE_DIR;
+        // Open the directory
+        DIR *dir = opendir(full_path);
+        if (dir == NULL)
+        {
+            perror("opendir");
+            return;
+        }
+
+        // Start the HTML response
+        char *html_start = "<html><head><style>"
+                           "body {font-family: Arial, sans-serif; margin:0; padding:0; background-color: #f0f0f0;}"
+                           "ul {list-style-type: none; margin: 0; padding: 0;}"
+                           "li {padding: 10px 0; border-bottom: 1px solid #ddd;}"
+                           "li:last-child {border-bottom: none;}"
+                           "li a {text-decoration: none; color: #333; display: block; padding: 10px;}"
+                           "li a:hover {background-color: #ddd;}"
+                           "</style></head><body><ul>";
+        char *html_end = "</ul></body></html>";
+        char html_body[4096] = ""; // Adjust size as needed
+
+        struct dirent *entry;
+        while ((entry = readdir(dir)) != NULL)
+        {
+            // Skip . and .. entries
+            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+            {
+                continue;
+            }
+
+            // Add a list item with a link to the file
+            char item[1024]; // Adjust size as needed
+            if (strcmp(req_header.path, "/") == 0)
+            {
+                // If we are in the root directory
+                snprintf(item, sizeof(item), "<li><a href=\"/%s\">%s</a></li>", entry->d_name, entry->d_name);
+            }
+            else
+            {
+                // If we are in a subdirectory
+                snprintf(item, sizeof(item), "<li><a href=\"%s/%s\">%s</a></li>", req_header.path, entry->d_name, entry->d_name);
+            }
+            strncat(html_body, item, sizeof(html_body) - strlen(html_body) - 1);
+        }
+
+        // Close the directory
+        closedir(dir);
+
+        // Construct the full HTML response
+        char html_response[4096]; // Adjust size as needed
+        snprintf(html_response, sizeof(html_response), "%s%s%s", html_start, html_body, html_end);
+
+        // Set the response fields
+        res_header.content_type = "text/html";
+        file_size = strlen(html_response);
+
+        size_t buffer_size = strlen(html_start) + strlen(html_body) + strlen(html_end) + 1;
+        page_buffer = malloc(buffer_size);
+        if (page_buffer == NULL)
+        {
+            fprintf(stderr, "Failed to allocate memory for page_buffer.\n");
+            return;
+        }
+        snprintf(page_buffer, buffer_size, "%s%s%s", html_start, html_body, html_end);
+    }
+    else if (S_ISREG(path_stat.st_mode))
+    {
+        current_state = SERVE_FILE;
+        res_header.content_type = get_mime_type(req_header.path);
+
+        snprintf(file_path, sizeof(file_path), "%s%s", server_config.root_dir, req_header.path);
+        printf("Serving file: %s\n", file_path);
+        // Open the file
+        fd = open(file_path, O_RDONLY);
+        if (fd == -1)
+        {
+            perror("open");
+            return;
+        }
+
+        // Get file stats
+        if (fstat(fd, &file_stat) < 0)
+        {
+            perror("fstat");
+            return;
+        }
+
+        file_size = file_stat.st_size;
     }
 
     // Construct the response header
@@ -207,12 +402,12 @@ void serve_request(const int connfd, Http_request_header req_header, Http_respon
              "HTTP/1.1 %s %s\r\n"
              "Content-Length: %ld\r\n"
              "Content-Type: %s\r\n"
-             //  "Connection: %s\r\n"
+             "Connection: %s\r\n"
              "%s\r\n",
              res_header.status_code, res_header.status_message,
-             file_stat.st_size,
+             file_size,
              res_header.content_type,
-             //  res_header.connection,
+             res_header.connection,
              res_header.additional_headers);
 
     printf("Response header:\n%s\n", response);
@@ -224,11 +419,24 @@ void serve_request(const int connfd, Http_request_header req_header, Http_respon
         return;
     }
 
-    // Send the file
-    if (sendfile(connfd, fd, NULL, file_stat.st_size) == -1)
+    if (current_state == SERVE_FILE)
     {
-        perror("sendfile");
-        return;
+        // Send the file
+        if (sendfile(connfd, fd, NULL, file_size) == -1)
+        {
+            perror("sendfile");
+            return;
+        }
+    }
+    else if (current_state == SERVE_DIR)
+    {
+        printf("sending page: %s\n", page_buffer);
+        // Send the file
+        if (send(connfd, page_buffer, strlen(page_buffer), 0) == -1)
+        {
+            perror("send");
+            return;
+        }
     }
 
     // Close the file
@@ -237,6 +445,8 @@ void serve_request(const int connfd, Http_request_header req_header, Http_respon
 
 void handle_client(Http_client *client, Server_config server_config)
 {
+    printf("\033[33mThread %ld\033[0m\n", pthread_self());
+
     Http_response_header res_header;
     bool keep_alive = false;
     fd_set set;
@@ -283,6 +493,7 @@ void handle_client(Http_client *client, Server_config server_config)
             printf("Request host: %s\n", req_header.host);
             parse_field(req_header.buffer, req_header.connection, "Connection");
             printf("Request connection: %s\n", req_header.connection);
+            printf("Request body: %s\n", req_header.body);
 
             // check if the connection is keep-alive
             if (strncmp(req_header.connection, "keep-alive", 10) == 0)
@@ -315,6 +526,22 @@ void handle_client(Http_client *client, Server_config server_config)
                     // serve_request_404(client->connfd, req_header, res_header, server_config);
                 }
                 // serve_request(client->connfd, req_header, res_header, server_config);
+            }
+            else if (req_header.method == HTTP_POST)
+            {
+                printf("POST request\n");
+                if (strcmp(get_mime_type(req_header.path), "application/json") == 0)
+                {
+                    printf("POST JSON request\n");
+                    save_json(req_header.path, req_header.body);
+                    serve_request(client->connfd, req_header, res_header, server_config);
+                    // serve_request_json(client->connfd, req_header, res_header, server_config);
+                }
+                else
+                {
+                    printf("text POST request\n");
+                    // serve_request(client->connfd, req_header, res_header, server_config);
+                }
             }
 
             // If the connection is not keep-alive, or an error occurred, break the loop

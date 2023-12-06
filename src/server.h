@@ -25,6 +25,7 @@
 #include <netinet/tcp.h>
 #include <sys/times.h>
 #include <sys/time.h>
+#include <dirent.h>
 
 #include <netinet/in.h>
 #include <stdbool.h>
@@ -84,6 +85,7 @@ typedef struct {
     char buffer[MAX_HEADER_SIZE];
     char host[64];
     char connection[64];
+    char body[MAX_BODY_SIZE];
 } Http_request_header;
 
 typedef struct {
