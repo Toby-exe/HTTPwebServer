@@ -94,54 +94,6 @@ int save_json(char *file_path, const char *data)
     return 0;
 }
 
-char *get_mime_type(char *type)
-{
-    // remove everything up to and including '.' from file name
-    type = strrchr(type, '.');
-    type++;
-
-    if (strcmp(type, "html") == 0)
-    {
-        return "text/html";
-    }
-    else if (strcmp(type, "css") == 0)
-    {
-        return "text/css";
-    }
-    else if (strcmp(type, "js") == 0)
-    {
-        return "application/javascript";
-    }
-    else if (strcmp(type, "jpg") == 0)
-    {
-        return "image/jpeg";
-    }
-    else if (strcmp(type, "png") == 0)
-    {
-        return "image/png";
-    }
-    else if (strcmp(type, "gif") == 0)
-    {
-        return "image/gif";
-    }
-    else if (strcmp(type, "ico") == 0)
-    {
-        return "image/x-icon";
-    }
-    else if (strcmp(type, "txt") == 0)
-    {
-        return "text/plain";
-    }
-    else if (strcmp(type, "json") == 0)
-    {
-        return "application/json";
-    }
-    else
-    {
-        return "text/plain";
-    }
-}
-
 bool file_exists(char *path, char *root_dir)
 {
     char full_path[BUF_SIZE];
@@ -529,18 +481,28 @@ void handle_client(Http_client *client, Server_config server_config)
             }
             else if (req_header.method == HTTP_POST)
             {
-                printf("POST request\n");
-                if (strcmp(get_mime_type(req_header.path), "application/json") == 0)
+                // if it is just a /, then ignore it
+                if ( strcmp(req_header.path, "/") == 0 )
                 {
-                    printf("POST JSON request\n");
-                    save_json(req_header.path, req_header.body);
-                    serve_request(client->connfd, req_header, res_header, server_config);
-                    // serve_request_json(client->connfd, req_header, res_header, server_config);
+                    printf("POST request to /\n");
+                    // serve_request(client->connfd, req_header, res_header, server_config);
                 }
                 else
                 {
-                    printf("text POST request\n");
-                    // serve_request(client->connfd, req_header, res_header, server_config);
+
+                    printf("POST request\n");
+                    if (strcmp(get_mime_type(req_header.path), "application/json") == 0)
+                    {
+                        printf("POST JSON request\n");
+                        save_json(req_header.path, req_header.body);
+                        serve_request(client->connfd, req_header, res_header, server_config);
+                        // serve_request_json(client->connfd, req_header, res_header, server_config);
+                    }
+                    else
+                    {
+                        printf("text POST request\n");
+                        // serve_request(client->connfd, req_header, res_header, server_config);
+                    }
                 }
             }
 
@@ -566,14 +528,14 @@ void *handle_client_wrapper(void *arg)
     printf("left handle_client\n");
 
     /* Update the thread status when finished. */
-    for (int i = 0; i < thread_count; i++)
-    {
-        if (pthread_equal(pthread_self(), thread_list[i].thread_id))
-        {
-            thread_list[i].status = 1;
-            break;
-        }
-    }
+    // for (int i = 0; i < thread_count; i++)
+    // {
+    //     if (pthread_equal(pthread_self(), thread_list[i].thread_id))
+    //     {
+    //         thread_list[i].status = 1;
+    //         break;
+    //     }
+    // }
 
     printf("about to free args\n");
     free(args); // Don't forget to free the memory when you're done
@@ -670,6 +632,9 @@ int main(int argc, char *argv[])
     printf("You can access it at: \033[32m\033[4mhttp://10.65.255.109:%d/index.html\033[0m\n", ntohs(server.server_addr.sin_port));
     printf("root dir: %s\n", server.config.root_dir);
 
+    create_mime_db();
+    ThreadPool *pool = thread_pool_create(8);
+
     while (1)
     {
 
@@ -694,17 +659,19 @@ int main(int argc, char *argv[])
         connection_count++;
         printf("Server: connection count is %d\n", connection_count);
 
-        ThreadInfo *info = &thread_list[thread_count++];
+        // ThreadInfo *info = &thread_list[thread_count++];
         Thread_args *args = malloc(sizeof(Thread_args));
 
         args->client = client;
         args->server_config = &server.config;
 
-        pthread_create(&info->thread_id, NULL, handle_client_wrapper, (void *)args);
-        printf("got back to main\n");
-        info->status = 0;
-        pthread_detach(info->thread_id);
+        // pthread_create(&info->thread_id, NULL, handle_client_wrapper, (void *)args);
+        // printf("got back to main\n");
+        // info->status = 0;
+        // pthread_detach(info->thread_id);
         // handle_client(client, server.config);
+
+        thread_pool_add_task(pool, handle_client_wrapper, (void *)args);
 
         // printf("\nThreads:\n");
         // for (int i = 0; i < thread_count; i++)
@@ -731,6 +698,9 @@ int main(int argc, char *argv[])
         printf("Memory Usage: %ld kB\n", mem_usage);
     }
 
+    destroy_mime_db();
+    thread_pool_wait(pool);
+    thread_pool_destroy(pool);
     close(server.sockfd);
 
     return 0;

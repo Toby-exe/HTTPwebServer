@@ -26,6 +26,8 @@
 #include <sys/times.h>
 #include <sys/time.h>
 #include <dirent.h>
+#include "pool.h"
+#include "mime.h"
 
 #include <netinet/in.h>
 #include <stdbool.h>
@@ -34,7 +36,7 @@
 #define MAXLINE 4096
 #define MAX_BODY_SIZE 1000000
 #define MAX_HEADER_SIZE 100000
-#define PORT 7078
+#define PORT 7079
 #define BACKLOG 1000
 #define FAIL -1
 
