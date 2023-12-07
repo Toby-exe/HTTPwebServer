@@ -270,7 +270,7 @@ void serve_file(const int connfd, Http_request_header req_header, Http_response_
     memset(response, 0, sizeof(response));
     memset(file_path, 0, sizeof(file_path));
 
-    res_header.content_type = get_mime_type(req_header.path);
+    strcpy(res_header.content_type, get_mime_type(req_header.path));
 
     snprintf(file_path, sizeof(file_path), "%s%s", server_config.root_dir, req_header.path);
     printf("Serving file: %s\n", file_path);
@@ -361,7 +361,7 @@ void serve_dir(const int connfd, Http_request_header req_header, Http_response_h
     snprintf(html_response, sizeof(html_response), "%s%s%s", html_start, html_body, html_end);
 
     // Set the response fields
-    res_header.content_type = "text/html";
+    strcpy(res_header.content_type, "text/html");
     file_size = strlen(html_response);
 
     size_t buffer_size = strlen(html_start) + strlen(html_body) + strlen(html_end) + 1;
@@ -414,10 +414,10 @@ void serve_request(const int connfd, Http_request_header req_header, Http_respon
 void serve_request_404(const int connfd, Http_request_header req_header, Http_response_header res_header, Server_config server_config)
 {
     memset(&res_header.content_type, 0, sizeof(res_header.content_type));
-    res_header.status_code = "404";
-    res_header.status_message = "Not Found";
-    res_header.additional_headers = "Server: tinyserver\r\n";
-    res_header.connection = "close";
+    strcpy(res_header.status_code, "404");
+    strcpy(res_header.status_message, "Not Found");
+    strcpy(res_header.additional_headers, "Server: tinyserver\r\n");
+    strcpy(res_header.connection, "close");
     strcpy(req_header.path, "/404.html");
     serve_request(connfd, req_header, res_header, server_config);
     return;
@@ -479,10 +479,11 @@ void handle_client(Http_client *client, Server_config server_config)
     struct timeval timeout;
 
     memset(&res_header, 0, sizeof(res_header));
-    res_header.status_code = "200";
-    res_header.status_message = "OK";
-    res_header.additional_headers = "Keep-Alive: timeout=10\r\nServer: tinyserver\r\n";
-    res_header.connection = "close";
+
+    strcpy(res_header.status_code, "200");
+    strcpy(res_header.status_message, "OK");
+    strcpy(res_header.additional_headers, "Keep-Alive: timeout=10\r\nServer: tinyserver\r\n");
+    strcpy(res_header.connection, "close");
 
     do
     {
@@ -518,13 +519,15 @@ void handle_client(Http_client *client, Server_config server_config)
             if (strncmp(req_header.connection, "keep-alive", 10) == 0)
             {
                 keep_alive = true;
-                res_header.connection = "keep-alive";
+                // res_header.connection = "keep-alive";
+                strcpy(res_header.connection, "keep-alive");
                 printf("Connection is keep-alive\n");
             }
             else
             {
                 keep_alive = false;
-                res_header.connection = "close";
+                // res_header.connection = "close";
+                strcpy(res_header.connection, "close");
                 printf("Connection is close\n");
             }
 
@@ -711,57 +714,4 @@ void calculate_usage(struct timeval start, struct timeval wall_start)
     long mem_usage = get_memory_usage();
     printf("CPU Usage: %.2lf%%\n", cpu_usage);
     printf("Memory Usage: %ld kB\n", mem_usage);
-}
-
-void print_logo()
-{
-    printf("\033[1;31m"); // Set the text color to red
-    printf("  ______ _                             \n");
-    printf(" /_  __/(_)____   __  __               \n");
-    printf("  / /  / // __ \\ / / / /               \n");
-    printf(" / /  / // / / // /_/ /                \n");
-    printf("/_/  /_//_/ /_/ \\__, /                 \n");
-    printf("               /____/                  \n");
-
-    printf("\033[1;33m"); // Set the text color to bright orange
-    printf("   _____                                \n");
-    printf("  / ___/ ___   _____ _   __ ___   _____\n");
-    printf("  \\__ \\ / _ \\ / ___/| | / // _ \\ / ___/\n");
-    printf(" ___/ //  __// /    | |/ //  __// /    \n");
-    printf("/____/ \\___//_/     |___/ \\___//_/     \n");
-    printf("\033[0m"); // Reset the text color
-
-    return;
-}
-int main(int argc, char *argv[])
-{
-    print_logo();
-
-    Http_server server;
-    start_server(&server, argc, argv);
-
-    create_mime_db();
-    ThreadPool *pool = thread_pool_create(8);
-    int connection_count = 0;
-
-    while (1)
-    {
-        struct rusage usage;
-        struct timeval start, wall_start;
-
-        // Get the start time
-        getrusage(RUSAGE_SELF, &usage);
-        start = usage.ru_utime;
-        gettimeofday(&wall_start, NULL); // Get the wall start time
-
-        accept_client(&server, pool, &connection_count);
-        calculate_usage(start, wall_start);
-    }
-
-    destroy_mime_db();
-    thread_pool_wait(pool);
-    thread_pool_destroy(pool);
-    close(server.sockfd);
-
-    return 0;
 }
