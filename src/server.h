@@ -29,6 +29,9 @@
 #include "pool.h"
 #include "mime.h"
 
+#define DEFAULT_PORT "8080"
+#define DEFAULT_ROOT_DIR "../public"
+
 #include <netinet/in.h>
 #include <stdbool.h>
 #include <sys/resource.h>
@@ -56,26 +59,8 @@ typedef enum {
 } http_method;
 
 typedef struct {
-    http_method method;
-    char header[MAX_HEADER_SIZE];
-    char body[MAX_BODY_SIZE];
-    char file_path[MAXLINE];
-    char connection[MAXLINE];
-} Http_request;
-
-typedef struct {
-    char status_code[MAXLINE];
-    char content_type[MAXLINE];
-    int num_headers;
-    char body[MAX_BODY_SIZE];
-    char file_path[MAXLINE];
-} Http_response;
-
-typedef struct {
     int connfd;
     SA_IN client_addr;
-    Http_request request;
-    // http_response response;
 } Http_client;
 
 
@@ -106,11 +91,9 @@ typedef enum {
 
 typedef struct {
     Switch_t enable_mt;
-    Switch_t enable_cache;
     int num_threads;
-    int max_queue_size;
-    int max_cache_size;
     char root_dir[128];
+    char port[8];
 } Server_config;
 
 typedef struct {

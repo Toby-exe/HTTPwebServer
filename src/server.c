@@ -221,133 +221,9 @@ int handle_http_request(const int connfd, Http_request_header *req_header)
     return 0;
 }
 
-void serve_request(const int connfd, Http_request_header req_header, Http_response_header res_header, Server_config server_config)
+void send_response(const int connfd, Http_response_header res_header, long file_size)
 {
-    // create state machine either in serve file or server dir
-    enum state
-    {
-        SERVE_FILE,
-        SERVE_DIR
-    };
-
-    enum state current_state = SERVE_FILE;
-    // print thread id in yellow
     char response[MAX_HEADER_SIZE];
-    char file_path[256];
-    struct stat file_stat;
-    int fd;
-    long file_size = 0;
-    char *page_buffer;
-
-    memset(&res_header.content_type, 0, sizeof(res_header.content_type));
-    memset(response, 0, sizeof(response));
-    memset(file_path, 0, sizeof(file_path));
-
-    printf("inside serve_request\n");
-
-    // Construct the full path
-    char full_path[4096]; // Adjust size as needed
-    snprintf(full_path, sizeof(full_path), "%s%s", server_config.root_dir, req_header.path);
-
-    // Get file or directory information
-    struct stat path_stat;
-    if (stat(full_path, &path_stat) == -1)
-    {
-        perror("stat");
-        return;
-    }
-
-    if (S_ISDIR(path_stat.st_mode))
-    {
-        current_state = SERVE_DIR;
-        // Open the directory
-        DIR *dir = opendir(full_path);
-        if (dir == NULL)
-        {
-            perror("opendir");
-            return;
-        }
-
-        // Start the HTML response
-        char *html_start = "<html><head><style>"
-                           "body {font-family: Arial, sans-serif; margin:0; padding:0; background-color: #f0f0f0;}"
-                           "ul {list-style-type: none; margin: 0; padding: 0;}"
-                           "li {padding: 10px 0; border-bottom: 1px solid #ddd;}"
-                           "li:last-child {border-bottom: none;}"
-                           "li a {text-decoration: none; color: #333; display: block; padding: 10px;}"
-                           "li a:hover {background-color: #ddd;}"
-                           "</style></head><body><ul>";
-        char *html_end = "</ul></body></html>";
-        char html_body[4096] = ""; // Adjust size as needed
-
-        struct dirent *entry;
-        while ((entry = readdir(dir)) != NULL)
-        {
-            // Skip . and .. entries
-            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
-            {
-                continue;
-            }
-
-            // Add a list item with a link to the file
-            char item[1024]; // Adjust size as needed
-            if (strcmp(req_header.path, "/") == 0)
-            {
-                // If we are in the root directory
-                snprintf(item, sizeof(item), "<li><a href=\"/%s\">%s</a></li>", entry->d_name, entry->d_name);
-            }
-            else
-            {
-                // If we are in a subdirectory
-                snprintf(item, sizeof(item), "<li><a href=\"%s/%s\">%s</a></li>", req_header.path, entry->d_name, entry->d_name);
-            }
-            strncat(html_body, item, sizeof(html_body) - strlen(html_body) - 1);
-        }
-
-        // Close the directory
-        closedir(dir);
-
-        // Construct the full HTML response
-        char html_response[4096]; // Adjust size as needed
-        snprintf(html_response, sizeof(html_response), "%s%s%s", html_start, html_body, html_end);
-
-        // Set the response fields
-        res_header.content_type = "text/html";
-        file_size = strlen(html_response);
-
-        size_t buffer_size = strlen(html_start) + strlen(html_body) + strlen(html_end) + 1;
-        page_buffer = malloc(buffer_size);
-        if (page_buffer == NULL)
-        {
-            fprintf(stderr, "Failed to allocate memory for page_buffer.\n");
-            return;
-        }
-        snprintf(page_buffer, buffer_size, "%s%s%s", html_start, html_body, html_end);
-    }
-    else if (S_ISREG(path_stat.st_mode))
-    {
-        current_state = SERVE_FILE;
-        res_header.content_type = get_mime_type(req_header.path);
-
-        snprintf(file_path, sizeof(file_path), "%s%s", server_config.root_dir, req_header.path);
-        printf("Serving file: %s\n", file_path);
-        // Open the file
-        fd = open(file_path, O_RDONLY);
-        if (fd == -1)
-        {
-            perror("open");
-            return;
-        }
-
-        // Get file stats
-        if (fstat(fd, &file_stat) < 0)
-        {
-            perror("fstat");
-            return;
-        }
-
-        file_size = file_stat.st_size;
-    }
 
     // Construct the response header
     snprintf(response, sizeof(response),
@@ -368,31 +244,184 @@ void serve_request(const int connfd, Http_request_header req_header, Http_respon
     if (send(connfd, response, strlen(response), 0) == -1)
     {
         perror("send");
+    }
+}
+
+
+void serve_file(const int connfd, Http_request_header req_header, Http_response_header res_header, Server_config server_config)
+{
+    char response[MAX_HEADER_SIZE];
+    char file_path[256];
+    struct stat file_stat;
+    int fd;
+    long file_size = 0;
+
+    memset(&res_header.content_type, 0, sizeof(res_header.content_type));
+    memset(response, 0, sizeof(response));
+    memset(file_path, 0, sizeof(file_path));
+
+    res_header.content_type = get_mime_type(req_header.path);
+
+    snprintf(file_path, sizeof(file_path), "%s%s", server_config.root_dir, req_header.path);
+    printf("Serving file: %s\n", file_path);
+    // Open the file
+    fd = open(file_path, O_RDONLY);
+    if (fd == -1)
+    {
+        perror("open");
         return;
     }
 
-    if (current_state == SERVE_FILE)
+    // Get file stats
+    if (fstat(fd, &file_stat) < 0)
     {
-        // Send the file
-        if (sendfile(connfd, fd, NULL, file_size) == -1)
-        {
-            perror("sendfile");
-            return;
-        }
+        perror("fstat");
+        return;
     }
-    else if (current_state == SERVE_DIR)
+
+    file_size = file_stat.st_size;
+
+    send_response(connfd, res_header, file_size);
+
+    // Send the file
+    if (sendfile(connfd, fd, NULL, file_size) == -1)
     {
-        printf("sending page: %s\n", page_buffer);
-        // Send the file
-        if (send(connfd, page_buffer, strlen(page_buffer), 0) == -1)
-        {
-            perror("send");
-            return;
-        }
+        perror("sendfile");
+        return;
     }
 
     // Close the file
     close(fd);
+}
+
+void serve_dir(const int connfd, Http_request_header req_header, Http_response_header res_header, Server_config server_config)
+{
+    char response[MAX_HEADER_SIZE];
+    char file_path[256];
+    long file_size = 0;
+    char *page_buffer;
+
+    memset(&res_header.content_type, 0, sizeof(res_header.content_type));
+    memset(response, 0, sizeof(response));
+    memset(file_path, 0, sizeof(file_path));
+
+    // Construct the full path
+    char full_path[4096]; // Adjust size as needed
+    snprintf(full_path, sizeof(full_path), "%s%s", server_config.root_dir, req_header.path);
+
+    // Open the directory
+    DIR *dir = opendir(full_path);
+    if (dir == NULL)
+    {
+        perror("opendir");
+        return;
+    }
+
+    // Start the HTML response
+    char *html_start = "<html><head><style>"
+                       "body {font-family: Arial, sans-serif; margin:0; padding:0; background-color: #f0f0f0;}"
+                       "ul {list-style-type: none; margin: 0; padding: 0;}"
+                       "li {padding: 10px 0; border-bottom: 1px solid #ddd;}"
+                       "li:last-child {border-bottom: none;}"
+                       "li a {text-decoration: none; color: #333; display: block; padding: 10px;}"
+                       "li a:hover {background-color: #ddd;}"
+                       "</style></head><body><ul>";
+    char *html_end = "</ul></body></html>";
+    char html_body[4096] = ""; // Adjust size as needed
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL)
+    {
+        // Skip . and .. entries
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+        {
+            continue;
+        }
+
+        // Add a list item with a link to the file
+        char item[1024]; // Adjust size as needed
+        if (strcmp(req_header.path, "/") == 0)
+        {
+            // If we are in the root directory
+            snprintf(item, sizeof(item), "<li><a href=\"/%s\">%s</a></li>", entry->d_name, entry->d_name);
+        }
+        else
+        {
+            // If we are in a subdirectory
+            snprintf(item, sizeof(item), "<li><a href=\"%s/%s\">%s</a></li>", req_header.path, entry->d_name, entry->d_name);
+        }
+        strncat(html_body, item, sizeof(html_body) - strlen(html_body) - 1);
+    }
+
+    // Close the directory
+    closedir(dir);
+
+    // Construct the full HTML response
+    char html_response[4096]; // Adjust size as needed
+    snprintf(html_response, sizeof(html_response), "%s%s%s", html_start, html_body, html_end);
+
+    // Set the response fields
+    res_header.content_type = "text/html";
+    file_size = strlen(html_response);
+
+    size_t buffer_size = strlen(html_start) + strlen(html_body) + strlen(html_end) + 1;
+    page_buffer = malloc(buffer_size);
+    if (page_buffer == NULL)
+    {
+        fprintf(stderr, "Failed to allocate memory for page_buffer.\n");
+        return;
+    }
+    snprintf(page_buffer, buffer_size, "%s%s%s", html_start, html_body, html_end);
+
+    send_response(connfd, res_header, file_size);
+
+    printf("sending page: %s\n", page_buffer);
+    // Send the file
+    if (send(connfd, page_buffer, strlen(page_buffer), 0) == -1)
+    {
+        perror("send");
+        return;
+    }
+}
+
+void serve_request(const int connfd, Http_request_header req_header, Http_response_header res_header, Server_config server_config)
+{
+    // create state machine either in serve file or server dir
+    // Construct the full path
+    char full_path[4096]; // Adjust size as needed
+    snprintf(full_path, sizeof(full_path), "%s%s", server_config.root_dir, req_header.path);
+
+    // Get file or directory information
+    struct stat path_stat;
+    if (stat(full_path, &path_stat) == -1)
+    {
+        perror("stat");
+        return;
+    }
+
+    if (S_ISDIR(path_stat.st_mode))
+    {
+        // current_state = SERVE_DIR;
+        serve_dir(connfd, req_header, res_header, server_config);
+    }
+    else if (S_ISREG(path_stat.st_mode))
+    {
+        // current_state = SERVE_FILE;
+        serve_file(connfd, req_header, res_header, server_config);
+    }
+}
+
+
+void serve_request_404(const int connfd, Http_request_header req_header, Http_response_header res_header, Server_config server_config)
+{
+    memset(&res_header.content_type, 0, sizeof(res_header.content_type));
+    res_header.status_code = "404";
+    res_header.status_message = "Not Found";
+    res_header.additional_headers = "Server: tinyserver\r\n";
+    res_header.connection = "close";
+    strcpy(req_header.path, "/404.html");
+    serve_request(connfd, req_header, res_header, server_config);
+    return;
 }
 
 void handle_client(Http_client *client, Server_config server_config)
@@ -474,15 +503,16 @@ void handle_client(Http_client *client, Server_config server_config)
                 }
                 else
                 {
+
                     printf("404 file not found\n");
-                    // serve_request_404(client->connfd, req_header, res_header, server_config);
+                    serve_request_404(client->connfd, req_header, res_header, server_config);
                 }
                 // serve_request(client->connfd, req_header, res_header, server_config);
             }
             else if (req_header.method == HTTP_POST)
             {
                 // if it is just a /, then ignore it
-                if ( strcmp(req_header.path, "/") == 0 )
+                if (strcmp(req_header.path, "/") == 0)
                 {
                     printf("POST request to /\n");
                     // serve_request(client->connfd, req_header, res_header, server_config);
@@ -525,19 +555,7 @@ void *handle_client_wrapper(void *arg)
     Server_config *server_config = args->server_config;
 
     handle_client(client, *server_config);
-    printf("left handle_client\n");
 
-    /* Update the thread status when finished. */
-    // for (int i = 0; i < thread_count; i++)
-    // {
-    //     if (pthread_equal(pthread_self(), thread_list[i].thread_id))
-    //     {
-    //         thread_list[i].status = 1;
-    //         break;
-    //     }
-    // }
-
-    printf("about to free args\n");
     free(args); // Don't forget to free the memory when you're done
 
     return NULL;
@@ -610,92 +628,141 @@ double calculate_cpu_usage()
 
 // https://stackoverflow.com/questions/8501706/how-to-get-the-cpu-usage-in-c - this helped with figuring out how to get the CPU usage
 
-int main(int argc, char *argv[])
+void start_server(Http_server *server, int argc, char *argv[])
 {
-    Http_server server;
-    int connection_count = 0;
-    strcpy(server.config.root_dir, argv[2]);
+    // Set default values
+    strcpy(server->config.port, DEFAULT_PORT);
+    strcpy(server->config.root_dir, DEFAULT_ROOT_DIR);
+    server->config.enable_mt = ON;
 
-    check_err((server.sockfd = socket(AF_INET, SOCK_STREAM, 0)), "Socket error");
+    // Override with command line arguments if provided
+    if (argc > 1)
+    {
+        strcpy(server->config.port, argv[1]);
+    }
+    if (argc > 2)
+    {
+        strcpy(server->config.root_dir, argv[2]);
+    }
+    if (argc > 3)
+    {
+        if (strcmp(argv[3], "on") == 0)
+        {
+            server->config.enable_mt = ON;
+        }
+        else if (strcmp(argv[3], "off") == 0)
+        {
+            server->config.enable_mt = OFF;
+        }
+    }
+    check_err((server->sockfd = socket(AF_INET, SOCK_STREAM, 0)), "Socket error");
 
-    server.server_addr.sin_family = AF_INET;
-    server.server_addr.sin_addr.s_addr = INADDR_ANY;
-    server.server_addr.sin_port = htons(PORT);
+    server->server_addr.sin_family = AF_INET;
+    server->server_addr.sin_addr.s_addr = INADDR_ANY;
+    server->server_addr.sin_port = htons(atoi(server->config.port));
 
     int optval = 1;
-    check_err(setsockopt(server.sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)), "Setsockopt error");
+    check_err(setsockopt(server->sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)), "Setsockopt error");
 
-    check_err(bind(server.sockfd, (SA *)&server.server_addr, sizeof(server.server_addr)), "Bind error");
-    check_err(listen(server.sockfd, BACKLOG), "Listen error");
+    check_err(bind(server->sockfd, (SA *)&server->server_addr, sizeof(server->server_addr)), "Bind error");
+    check_err(listen(server->sockfd, BACKLOG), "Listen error");
 
-    printf("Server: waiting for connection on port %d...\n", ntohs(server.server_addr.sin_port));
-    printf("You can access it at: \033[32m\033[4mhttp://10.65.255.109:%d/index.html\033[0m\n", ntohs(server.server_addr.sin_port));
-    printf("root dir: %s\n", server.config.root_dir);
+    printf("Server: waiting for connection on port %s...\n", server->config.port);
+    printf("You can access it at: \033[32m\033[4mhttp://10.65.255.109:%s/\033[0m\n", server->config.port);
+    printf("root dir: %s\n", server->config.root_dir);
+}
+
+void accept_client(Http_server *server, ThreadPool *pool, int *connection_count)
+{
+    Http_client *client = malloc(sizeof(Http_client));
+    socklen_t addr_size = sizeof(client->client_addr);
+
+    check_err((client->connfd = accept(server->sockfd, (SA *)&client->client_addr, &addr_size)), "Accept error");
+
+    printf("Server: got connection from %s\n", inet_ntoa(client->client_addr.sin_addr));
+    (*connection_count)++;
+    printf("Server: connection count is %d\n", *connection_count);
+
+    Thread_args *args = malloc(sizeof(Thread_args));
+    args->client = client;
+    args->server_config = &server->config;
+
+    thread_pool_add_task(pool, handle_client_wrapper, (void *)args);
+}
+
+void calculate_usage(struct timeval start, struct timeval wall_start)
+{
+    struct rusage usage;
+    struct timeval end, wall_end;
+    long sec, usec;
+    double cpu_time, wall_time;
+
+    // Get the number of CPU cores
+    int num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+
+    // Get the end time
+    getrusage(RUSAGE_SELF, &usage);
+    end = usage.ru_utime;
+    gettimeofday(&wall_end, NULL); // Get the wall end time
+
+    // Calculate the CPU time (in seconds)
+    sec = end.tv_sec - start.tv_sec;
+    usec = end.tv_usec - start.tv_usec;
+    cpu_time = sec + usec / 1e6;
+
+    // Calculate the wall time (in seconds)
+    wall_time = (wall_end.tv_sec - wall_start.tv_sec) + (wall_end.tv_usec - wall_start.tv_usec) / 1e6;
+
+    // Calculate the CPU usage
+    double cpu_usage = cpu_time / num_cores / wall_time * 100;
+    long mem_usage = get_memory_usage();
+    printf("CPU Usage: %.2lf%%\n", cpu_usage);
+    printf("Memory Usage: %ld kB\n", mem_usage);
+}
+
+void print_logo()
+{
+    printf("\033[1;31m"); // Set the text color to red
+    printf("  ______ _                             \n");
+    printf(" /_  __/(_)____   __  __               \n");
+    printf("  / /  / // __ \\ / / / /               \n");
+    printf(" / /  / // / / // /_/ /                \n");
+    printf("/_/  /_//_/ /_/ \\__, /                 \n");
+    printf("               /____/                  \n");
+
+    printf("\033[1;33m"); // Set the text color to bright orange
+    printf("   _____                                \n");
+    printf("  / ___/ ___   _____ _   __ ___   _____\n");
+    printf("  \\__ \\ / _ \\ / ___/| | / // _ \\ / ___/\n");
+    printf(" ___/ //  __// /    | |/ //  __// /    \n");
+    printf("/____/ \\___//_/     |___/ \\___//_/     \n");
+    printf("\033[0m"); // Reset the text color
+
+    return;
+}
+int main(int argc, char *argv[])
+{   
+    print_logo();
+
+    Http_server server;
+    start_server(&server, argc, argv);
 
     create_mime_db();
     ThreadPool *pool = thread_pool_create(8);
+    int connection_count = 0;
 
     while (1)
     {
-
-        Http_client *client = malloc(sizeof(Http_client));
-        socklen_t addr_size = sizeof(client->client_addr);
         struct rusage usage;
-        struct timeval start, end, wall_start, wall_end;
-        long sec, usec;
-        double cpu_time, wall_time;
-
-        // Get the number of CPU cores
-        int num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+        struct timeval start, wall_start;
 
         // Get the start time
         getrusage(RUSAGE_SELF, &usage);
         start = usage.ru_utime;
         gettimeofday(&wall_start, NULL); // Get the wall start time
 
-        check_err((client->connfd = accept(server.sockfd, (SA *)&client->client_addr, &addr_size)), "Accept error");
-
-        printf("Server: got connection from %s\n", inet_ntoa(client->client_addr.sin_addr));
-        connection_count++;
-        printf("Server: connection count is %d\n", connection_count);
-
-        // ThreadInfo *info = &thread_list[thread_count++];
-        Thread_args *args = malloc(sizeof(Thread_args));
-
-        args->client = client;
-        args->server_config = &server.config;
-
-        // pthread_create(&info->thread_id, NULL, handle_client_wrapper, (void *)args);
-        // printf("got back to main\n");
-        // info->status = 0;
-        // pthread_detach(info->thread_id);
-        // handle_client(client, server.config);
-
-        thread_pool_add_task(pool, handle_client_wrapper, (void *)args);
-
-        // printf("\nThreads:\n");
-        // for (int i = 0; i < thread_count; i++)
-        // {
-        //     printf("Thread %d:%ld %s\n", i, thread_list[i].thread_id, thread_list[i].status ? "Finished" : "Running");
-        // }
-        // Get the end time
-        getrusage(RUSAGE_SELF, &usage);
-        end = usage.ru_utime;
-        gettimeofday(&wall_end, NULL); // Get the wall end time
-
-        // Calculate the CPU time (in seconds)
-        sec = end.tv_sec - start.tv_sec;
-        usec = end.tv_usec - start.tv_usec;
-        cpu_time = sec + usec / 1e6;
-
-        // Calculate the wall time (in seconds)
-        wall_time = (wall_end.tv_sec - wall_start.tv_sec) + (wall_end.tv_usec - wall_start.tv_usec) / 1e6;
-
-        // Calculate the CPU usage
-        double cpu_usage = cpu_time / num_cores / wall_time * 100;
-        long mem_usage = get_memory_usage();
-        printf("CPU Usage: %.2lf%%\n", cpu_usage);
-        printf("Memory Usage: %ld kB\n", mem_usage);
+        accept_client(&server, pool, &connection_count);
+        calculate_usage(start, wall_start);
     }
 
     destroy_mime_db();
