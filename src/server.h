@@ -31,6 +31,7 @@
 
 #define DEFAULT_PORT "8080"
 #define DEFAULT_ROOT_DIR "../public"
+#define DIR_LISTING_PAGE_SZ ((1024 * 1024) + 4096)
 
 #include <netinet/in.h>
 #include <stdbool.h>

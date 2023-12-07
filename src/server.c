@@ -1,5 +1,16 @@
 #include "server.h"
 
+const char html_start[] = "<html><head><style>"
+                          "body {font-family: Arial, sans-serif; margin:0; padding:0; background-color: #f0f0f0;}"
+                          "ul {list-style-type: none; margin: 0; padding: 0;}"
+                          "li {padding: 10px 0; border-bottom: 1px solid #ddd;}"
+                          "li:last-child {border-bottom: none;}"
+                          "li a {text-decoration: none; color: #333; display: block; padding: 10px;}"
+                          "li a:hover {background-color: #ddd;}"
+                          "</style></head><body><ul>";
+
+const char html_end[] = "</ul></body></html>";
+
 void check_err(int val, char *msg)
 {
     if (val == -1)
@@ -247,7 +258,6 @@ void send_response(const int connfd, Http_response_header res_header, long file_
     }
 }
 
-
 void serve_file(const int connfd, Http_request_header req_header, Http_response_header res_header, Server_config server_config)
 {
     char response[MAX_HEADER_SIZE];
@@ -317,17 +327,7 @@ void serve_dir(const int connfd, Http_request_header req_header, Http_response_h
         return;
     }
 
-    // Start the HTML response
-    char *html_start = "<html><head><style>"
-                       "body {font-family: Arial, sans-serif; margin:0; padding:0; background-color: #f0f0f0;}"
-                       "ul {list-style-type: none; margin: 0; padding: 0;}"
-                       "li {padding: 10px 0; border-bottom: 1px solid #ddd;}"
-                       "li:last-child {border-bottom: none;}"
-                       "li a {text-decoration: none; color: #333; display: block; padding: 10px;}"
-                       "li a:hover {background-color: #ddd;}"
-                       "</style></head><body><ul>";
-    char *html_end = "</ul></body></html>";
-    char html_body[4096] = ""; // Adjust size as needed
+    char html_body[1024 * 1024] = {0}; // 1mb
 
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL)
@@ -357,7 +357,7 @@ void serve_dir(const int connfd, Http_request_header req_header, Http_response_h
     closedir(dir);
 
     // Construct the full HTML response
-    char html_response[4096]; // Adjust size as needed
+    char html_response[DIR_LISTING_PAGE_SZ];
     snprintf(html_response, sizeof(html_response), "%s%s%s", html_start, html_body, html_end);
 
     // Set the response fields
@@ -411,7 +411,6 @@ void serve_request(const int connfd, Http_request_header req_header, Http_respon
     }
 }
 
-
 void serve_request_404(const int connfd, Http_request_header req_header, Http_response_header res_header, Server_config server_config)
 {
     memset(&res_header.content_type, 0, sizeof(res_header.content_type));
@@ -422,6 +421,52 @@ void serve_request_404(const int connfd, Http_request_header req_header, Http_re
     strcpy(req_header.path, "/404.html");
     serve_request(connfd, req_header, res_header, server_config);
     return;
+}
+
+void http_post_handler(const int connfd, Http_request_header req_header, Http_response_header res_header, Server_config server_config)
+{
+    printf("POST request\n");
+
+    // if it is just a /, then ignore it
+    if (strcmp(req_header.path, "/") == 0)
+    {
+        printf("POST request to /\n");
+        return;
+        // serve_request(client->connfd, req_header, res_header, server_config);
+    }
+    else
+    {
+
+        if (strcmp(get_mime_type(req_header.path), "application/json") == 0)
+        {
+            printf("POST JSON request\n");
+            save_json(req_header.path, req_header.body);
+            serve_request(connfd, req_header, res_header, server_config);
+            // serve_request_json(client->connfd, req_header, res_header, server_config);
+        }
+        else
+        {
+            printf("text POST request\n");
+            // serve_request(client->connfd, req_header, res_header, server_config);
+        }
+    }
+}
+
+void http_get_handler(const int connfd, Http_request_header req_header, Http_response_header res_header, Server_config server_config)
+{   
+    printf("GET request\n");
+    // check if target file exists
+    if (file_exists(req_header.path, server_config.root_dir))
+    {
+        printf("File exists\n");
+        serve_request(connfd, req_header, res_header, server_config);
+    }
+    else
+    {
+
+        printf("404 file not found\n");
+        serve_request_404(connfd, req_header, res_header, server_config);
+    }
 }
 
 void handle_client(Http_client *client, Server_config server_config)
@@ -469,13 +514,6 @@ void handle_client(Http_client *client, Server_config server_config)
                 close(client->connfd);
                 return;
             }
-            printf("Request method: %d\n", req_header.method);
-            printf("Request path: %s\n", req_header.path);
-            printf("Request host: %s\n", req_header.host);
-            parse_field(req_header.buffer, req_header.connection, "Connection");
-            printf("Request connection: %s\n", req_header.connection);
-            printf("Request body: %s\n", req_header.body);
-
             // check if the connection is keep-alive
             if (strncmp(req_header.connection, "keep-alive", 10) == 0)
             {
@@ -493,60 +531,15 @@ void handle_client(Http_client *client, Server_config server_config)
             // now it is time to serve the request (respond)
             if (req_header.method == HTTP_GET)
             {
-                printf("GET request\n");
-
-                // check if target file exists
-                if (file_exists(req_header.path, server_config.root_dir))
-                {
-                    printf("File exists\n");
-                    serve_request(client->connfd, req_header, res_header, server_config);
-                }
-                else
-                {
-
-                    printf("404 file not found\n");
-                    serve_request_404(client->connfd, req_header, res_header, server_config);
-                }
-                // serve_request(client->connfd, req_header, res_header, server_config);
+                http_get_handler(client->connfd, req_header, res_header, server_config);
             }
             else if (req_header.method == HTTP_POST)
             {
-                // if it is just a /, then ignore it
-                if (strcmp(req_header.path, "/") == 0)
-                {
-                    printf("POST request to /\n");
-                    // serve_request(client->connfd, req_header, res_header, server_config);
-                }
-                else
-                {
-
-                    printf("POST request\n");
-                    if (strcmp(get_mime_type(req_header.path), "application/json") == 0)
-                    {
-                        printf("POST JSON request\n");
-                        save_json(req_header.path, req_header.body);
-                        serve_request(client->connfd, req_header, res_header, server_config);
-                        // serve_request_json(client->connfd, req_header, res_header, server_config);
-                    }
-                    else
-                    {
-                        printf("text POST request\n");
-                        // serve_request(client->connfd, req_header, res_header, server_config);
-                    }
-                }
-            }
-
-            // If the connection is not keep-alive, or an error occurred, break the loop
-            if (!keep_alive || client->connfd == -1)
-            {
-                break;
+                http_post_handler(client->connfd, req_header, res_header, server_config);
             }
         }
     } while (keep_alive);
 }
-
-ThreadInfo thread_list[MAX_THREADS];
-int thread_count = 0;
 
 void *handle_client_wrapper(void *arg)
 {
@@ -741,7 +734,7 @@ void print_logo()
     return;
 }
 int main(int argc, char *argv[])
-{   
+{
     print_logo();
 
     Http_server server;
