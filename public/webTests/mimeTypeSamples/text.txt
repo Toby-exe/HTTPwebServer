@@ -1,0 +1,112 @@
+STAR WARS - EPISODE 4: STAR WARS
+
+THREEPIO	Did you hear that?  They've shut down the main reactor.  We'll be destroyed for sure.  This is madness!
+THREEPIO	We're doomed!
+THREEPIO	There'll be no escape for the Princess this time.
+THREEPIO	What's that?
+THREEPIO	I should have known better than to trust the logic of a half-sized thermocapsulary dehousing assister...
+LUKE	Hurry up!  Come with me!  What are you waiting for?!  Get in gear!
+THREEPIO	Artoo! Artoo-Detoo, where are you?
+THREEPIO	At last!  Where have you been?
+THREEPIO	They're heading in this direction. What are we going to do?  We'll be sent to the spice mines of Kessel or smashed into who knows what!
+THREEPIO	Wait a minute, where are you going?
+IMPERIAL OFFICER	The Death Star plans are not in the main computer.
+VADER	Where are those transmissions you intercepted?
+REBEL OFFICER	We intercepted no transmissions. Aaah...  This is a consular ship. Were on a diplomatic mission.
+VADER	If this is a consular ship... where is the Ambassador?
+VADER	Commander, tear this ship apart until you've found those plans and bring me the Ambassador.  I want her alive!
+TROOPER	There she is! Set for stun!
+TROOPER	She'll be all right. Inform Lord Vader we have a prisoner.
+THREEPIO	Hey, you're not permitted in there.  It's restricted. You'll be deactivated for sure..
+THREEPIO	Don't call me a mindless philosopher, you overweight glob of grease!  Now come out before somebody sees you.
+THREEPIO	Secret mission?  What plans?  What are you talking about?  I'm not getting in there!
+THREEPIO	I'm going to regret this.
+CHIEF PILOT	There goes another one.
+CAPTAIN	Hold your fire.  There are no life forms.  It must have been short-circuited.
+THREEPIO	That's funny, the damage doesn't look as bad from out here.
+THREEPIO	Are you sure this things safe?
+WOMAN	I've told you kids to slow down!
+FIXER	Did I hear a young noise blast through here?
+CAMIE	It was just Wormie on another rampage.
+LUKE	Shape it up you guys!...  Biggs?
+LUKE	I didn't know you were back!  When did you get in?
+BIGGS	Just now.  I wanted to surprise you, hot shot.  I thought you'd be here... certainly didn't expect you to be out working. 
+LUKE	The Academy didn't change you much... but you're back so soon?  Hey, what happened, didn't you get your commission?
+BIGGS	Of course I got it.  Signed aboard The Rand Ecliptic last week.  First mate Biggs Darklighter at your service...... I just came back to say goodbye to all you unfortunate landlocked simpletons.
+LUKE	I almost forgot.  There's a battle going on!  Right here in our system.  Come and look!
+DEAK	Not again!  Forget it.
+LUKE	There they are!
+BIGGS	That's no battle, hot shot... they're just sitting there!  Probably a freighter-tanker refueling.
+LUKE	But there was a lot of firing earlier...
+LUKE	Hey, easy with those...
+CAMIE	Don't worry about it, Wormie.
+FIXER	I keep telling you, the Rebellion is a long way from here.  I doubt if the Empire would even fight to keep this system.  Believe me Luke, this planet is a big hunk of nothing...
+LEIA	Lord Vader, I should have known.  Only you could be so bold.  The Imperial Senate will not sit stillfor this, when they hear you've attacked a diplomatic...
+VADER	Don't play games with me, Your Highness.  You weren't on any mercy mission this time.  You passed directly through a restricted system.  Several transmissions were beamed to this ship by Rebel spies.  I want to know what happened to the plans they sent you.
+LEIA	I don't know what you're talking about.  I'm a member of the Imperial Senate on a diplomatic mission to Alderaan...
+VADER	You're a part of the Rebel Alliance... and a traitor.  Take her away!
+COMMANDER	Holding her is dangerous.  If word of this gets out, it could generate sympathy for the Rebellion in the senate.
+VADER	I have traced the Rebel spies to her.  Now she is my only link to find their secret base!
+COMMANDER	you anything.
+VADER	Leave that to me.  Send a distress signal and then inform the senate that all aboard were killed!
+SECOND OFFICER	Lord Vader, the battle station plans are not aboard this ship!  And no transmissions were made.  An escape pod was jettisoned during the fighting, but no life forms were aboard.
+VADER	She must have hidden the plans in the escape pod.  Send a detachment down to retrieve them.  See to it personally, Commander.  There'll be no one to stop us this time.
+COMMANDER	Yes, sir.
+THREEPIO	How did I get into this mess?  I really don't know how.  We seem to be made to suffer.  It's our lot in life.
+THREEPIO	I've got to rest before I fall apart.  My joints are almost frozen. 
+THREEPIO	What a desolate place this is.
+THREEPIO	Where are you going?
+THREEPIO	Well, I'm not going that way.  It's much too rocky.  This way is much easier.
+THREEPIO	What makes you think there are settlements over there?
+THREEPIO	Don't get technical with me.
+THREEPIO	What mission?  What are you talking about?  I've had just about enough of you!  Go that way!  You'll be malfunctioning within a day, you nearsighted scrap pile!
+THREEPIO	And don't let me catch you following me begging for help, because you won't get it.
+THREEPIO	No more adventures.  I'm not going that way.
+THREEPIO	That malfunctioning little twerp.  This is all his fault!  He tricked me into going this way, but he'll do no better.
+THREEPIO	Wait, what's that?  A transport!  I'm saved!
+THREEPIO	Over here!  Help!  Please, help!
+LUKE	... so I cut off my power, shut down the afterburners and came in low on Deak's trail.  I was so close I thought I was going to fry my instruments. As it was I busted up the Skyhopper pretty bad.  Uncle Owen was pretty upset.  He grounded me for the rest of the season.  You should have been there... it was fantastic.
+BIGGS	You ought to take it a little easy Luke.  You may be the hottest bushpilot this side of Mos Eisley, but those little Skyhoppers are dangerous.  Keep it up, and one day, whammo, you're going to be nothing more than a dark spot on the down side of a canyon wall.
+LUKE	Look who's talking.  Now that you've been around those giant starships you're beginning to sound like my uncle. You've gotten soft in the city...
+BIGGS	I've missed you kid.
+LUKE	Well, things haven't been the same since you left, Biggs.  It's been so...quiet.
+BIGGS	Luke, I didn't come back just to say goodbye...  I shouldn't tell you this, but you're the only one I can trust... and if I don't come back, I want somebody to know.
+LUKE	What are you talking about?
+BIGGS	I made some friends at the Academy. ... when our frigate goes to one of the central systems, we're going to jump ship and join the Alliance...
+LUKE	Join the Rebellion?!  Are you kidding!  How?
+BIGGS	Quiet down will ya!  You got a mouth bigger than a meteor crater!
+LUKE	I'm sorry.  I'm quiet. Listen how quiet I am.  You can barely hear me...
+BIGGS	My friend has a friend on Bestine who might help us make contact.
+LUKE	around forever trying to find them.
+BIGGS	I know it's a long shot, but if I don't find them I'll do what I can on my own...  It's what we always talked about.  Luke, I'm not going to wait for the Empire to draft me into service.  The Rebellion is spreading and I want to be on the right side - the side I believe in. 
+LUKE	And I'm stuck here...
+BIGGS	I thought you were going to the Academy next term.  You'll get your chance to get off this rock.
+LUKE	Not likely!  I had to cancel my application.  There has been a lot of unrest among the Sand People since you left... they've even raided the outskirts of Anchorhead.
+BIGGS	Your uncle could hold off a whole colony of Sand People with one blaster.
+LUKE	I know, but he's got enough vaporators going to make the place pay off.  He needs me for just one more season.  I can't leave him now.
+BIGGS	I feel for you, Luke, you're going to have to learn what seems to be important or what really is important.  What good is all your uncle's work if it's taken over by the Empire?...  You know they're starting to nationalize commerce in the central systems...it won't be long before your uncle is merely a tenant, slaving for the greater glory of the Empire.
+LUKE	It couldn't happen here.  You said it yourself.  The Empire won't bother with this rock.
+BIGGS	Things always change.
+LUKE	I wish I was going...  Are you going to be around long? 
+BIGGS	No, I'm leaving in the morning...
+LUKE	Then I guess I won't see you.
+BIGGS	Maybe someday...  I'll keep a lookout.
+LUKE	Well, I'll be at the Academy next season... after that who knows.  I won't be drafted into the Imperial Starfleet that's for sure...  Take care of yourself, you'll always be the best friend I've got.
+BIGGS	So long, Luke.
+THREEPIO	Artoo-Detoo!  It's you!  It's you!
+FIRST TROOPER	Someone was in the pod.  The tracks go off in this direction. 
+SECOND TROOPER	Look, sir - droids.
+THREEPIO	Wake up!  Wake up!
+THREEPIO	We're doomed.
+THREEPIO	Do you think they'll melt us down?
+THREEPIO	Don't shoot!  Don't shoot!  Will this never end?
+BERU	Luke, tell Owen that if he gets a translator to be sure it speaks Bocce.
+LUKE	It looks like we don't have much of a choice but I'll remind him.
+OWEN	I have no need for a protocol droid.
+THREEPIO	Sir - not in an environment such as this - that's why I've also been programmed for over thirty secondary functions that...
+OWEN	What I really need is a droid that understands the binary languages of moisture vaporators.
+THREEPIO	Vaporators!  Sir - My first job was programming binary load lifters... very similar to your vaporators.  You could say...
+OWEN	Do you speak Bocce?
+THREEPIO	Of course I can, sir.  It's like a second language for me...  I'm as fluent in Bocce...
+OWEN	All right; shut up! I'll take this one.
+THREEPIO	Shutting up, sir.

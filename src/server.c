@@ -1,3 +1,10 @@
+/**
+ * @file server.c
+ * @authors Tobias Wondwossen, Jayden Mingle
+ *
+ * @date 2023-12-06
+ */
+
 #include "server.h"
 
 const char html_start[] = "<html><head><style>"
@@ -11,6 +18,36 @@ const char html_start[] = "<html><head><style>"
 
 const char html_end[] = "</ul></body></html>";
 
+const char page_404[] = "<!DOCTYPE html>\r\n"
+                        "<html>\r\n"
+                        "<head>\r\n"
+                        "    <title>404 Not Found</title>\r\n"
+                        "    <style>\r\n"
+                        "        body { background-color: #fafafa; font-family: Arial, sans-serif; color: #333; margin: 0; padding: 0; }\r\n"
+                        "        .container { max-width: 600px; margin: 0 auto; padding: 20px; text-align: center; }\r\n"
+                        "        h1 { font-size: 48px; color: #888; }\r\n"
+                        "        p { font-size: 24px; }\r\n"
+                        "        a { color: #0645ad; text-decoration: none; }\r\n"
+                        "    </style>\r\n"
+                        "</head>\r\n"
+                        "<body>\r\n"
+                        "    <div class=\"container\">\r\n"
+                        "        <h1>404 Not Found</h1>\r\n"
+                        "        <p>The requested URL was not found on this server or you do not have access</p>\r\n"
+                        "        <p><a href=\"/\">Go to Home</a></p>\r\n"
+                        "    </div>\r\n"
+                        "</body>\r\n"
+                        "</html>\r\n";
+/**
+ * @brief Checks if a value is -1 and prints a message if it is
+ *
+ * This function takes an integer and a message as input. If the integer is -1, it prints
+ * the provided message.
+ *
+ * @param[in] val The integer to be checked
+ * @param[in] msg The message to be printed if the integer is -1
+ * @return This function does not return a value
+ */
 void check_err(int val, char *msg)
 {
     if (val == -1)
@@ -19,111 +56,18 @@ void check_err(int val, char *msg)
     }
 }
 
-int save_file(char *file_path, const char *data)
-{
-    FILE *fp;
-    char file_path_with_dir[1024] = "../public";
-    strcat(file_path_with_dir, file_path);
-    fp = fopen(file_path_with_dir, "w");
-
-    if (fp == NULL)
-    {
-        printf("Error opening file\n");
-        return -1;
-    }
-
-    fputs(data, fp);
-    fclose(fp);
-
-    return 0;
-}
-
 /**
- * @brief Save a JSON object to a file
+ * @brief Parses a specific field from a source string and copies it to a destination string
  *
- * This function takes a file path and a JSON string as input and appends the
- * JSON object to an existing or new JSON array in the file. It uses the cJSON
- * library to parse and print JSON data.
+ * This function takes a source string, a destination string, and a field name as input. It finds
+ * the field in the source string, and copies its value to the destination string. If the field is
+ * not found, it prints a message and returns.
  *
- * @param[in] file_path The relative path of the file to save the JSON object to
- * @param[in] data The JSON string to be saved
- * @return 0 if the operation was successful, -1 otherwise
+ * @param[in] src The source string to parse
+ * @param[out] des The destination string where the field value will be copied
+ * @param[in] field The field to be parsed from the source string
+ * @return This function does not return a value
  */
-int save_json(char *file_path, const char *data)
-{
-    FILE *fp;
-    char file_path_with_dir[1024] = "../public";
-    strcat(file_path_with_dir, file_path);
-    fp = fopen(file_path_with_dir, "r");
-    cJSON *json;
-
-    if (fp == NULL)
-    {
-        // if the file doesn't exist, create a new json array
-        json = cJSON_CreateArray();
-    }
-    else
-    {
-        // if the file exists, read its content
-        char buffer[MAX_BODY_SIZE];
-        size_t bytes_read = fread(buffer, 1, MAX_BODY_SIZE, fp);
-        fclose(fp);
-
-        if (bytes_read == 0)
-        {
-            // if the file is empty, create a new json array
-            json = cJSON_CreateArray();
-        }
-        else
-        {
-            // if the file is not empty, parse the existing json array
-            json = cJSON_Parse(buffer);
-        }
-    }
-
-    // create a new json object from the request body
-    cJSON *new_object = cJSON_Parse(data);
-
-    // add the new object to the json array
-    cJSON_AddItemToArray(json, new_object);
-
-    printf("tinyserver: json is %s\n", cJSON_Print(json));
-
-    // write the updated json array back to the file
-    fp = fopen(file_path_with_dir, "w");
-    if (fp == NULL)
-    {
-        printf("Error opening file\n");
-        return -1;
-    }
-    char *json_string = cJSON_Print(json);
-    fputs(json_string, fp);
-    free(json_string);
-    cJSON_Delete(json);
-    fclose(fp);
-
-    return 0;
-}
-
-bool file_exists(char *path, char *root_dir)
-{
-    char full_path[BUF_SIZE];
-    strcpy(full_path, root_dir);
-    strcat(full_path, path);
-
-    printf("checking if file exists at: %s\n", full_path);
-
-    if (access(full_path, F_OK) == -1)
-    {
-        printf("File does not exist\n");
-        return false;
-    }
-    else
-    {
-        return true;
-    }
-}
-
 void parse_field(char *src, char *des, const char *field)
 {
     char *start, *end;
@@ -150,6 +94,18 @@ void parse_field(char *src, char *des, const char *field)
     des[end - start] = '\0'; // Null terminate the destination string
 }
 
+/**
+ * @brief Handles an HTTP request
+ *
+ * This function takes a connection file descriptor and an HTTP request header as input. It
+ * reads the request from the connection, parses the request method and path, and fills the
+ * request header structure accordingly. If there is an error during the process, it prints
+ * an error message and returns -1.
+ *
+ * @param[in] connfd The connection file descriptor
+ * @param[out] req_header The HTTP request header structure to be filled
+ * @return 0 if the request was handled successfully, -1 otherwise
+ */
 int handle_http_request(const int connfd, Http_request_header *req_header)
 {
 
@@ -232,6 +188,19 @@ int handle_http_request(const int connfd, Http_request_header *req_header)
     return 0;
 }
 
+/**
+ * @brief Sends an HTTP response
+ *
+ * This function takes a connection file descriptor, an HTTP response header,
+ * and a file size as input. It constructs the response header and sends it
+ * through the connection. If there is an error during the process, it prints
+ * an error message.
+ *
+ * @param[in] connfd The connection file descriptor
+ * @param[in] res_header The HTTP response header structure
+ * @param[in] file_size The size of the file to be sent in the response
+ * @return This function does not return a value
+ */
 void send_response(const int connfd, Http_response_header res_header, long file_size)
 {
     char response[MAX_HEADER_SIZE];
@@ -258,10 +227,25 @@ void send_response(const int connfd, Http_response_header res_header, long file_
     }
 }
 
+/**
+ * @brief Serves a file over HTTP
+ *
+ * This function takes a connection file descriptor, an HTTP request header, an HTTP
+ * response header, and a server configuration as input. It constructs the path to
+ * the requested file, opens the file, gets its size, sends the response header, sends
+ * the file, and finally closes the file. If there is an error during the process, it
+ * prints an error message and returns.
+ *
+ * @param[in] connfd The connection file descriptor
+ * @param[in] req_header The HTTP request header structure
+ * @param[out] res_header The HTTP response header structure to be filled
+ * @param[in] server_config The server configuration
+ * @return This function does not return a value
+ */
 void serve_file(const int connfd, Http_request_header req_header, Http_response_header res_header, Server_config server_config)
 {
     char response[MAX_HEADER_SIZE];
-    char file_path[256];
+    char file_path[MAX_PATH_SIZE * 2];
     struct stat file_stat;
     int fd;
     long file_size = 0;
@@ -304,6 +288,20 @@ void serve_file(const int connfd, Http_request_header req_header, Http_response_
     close(fd);
 }
 
+/**
+ * @brief Serves a directory listing over HTTP
+ *
+ * This function takes a connection file descriptor, an HTTP request header, an HTTP response header,
+ * and a server configuration as input. It constructs the path to the requested directory, opens the
+ * directory, reads its entries, and sends a response with an HTML page that lists the directory entries.
+ * If there is an error during the process, it prints an error message and returns.
+ *
+ * @param[in] connfd The connection file descriptor
+ * @param[in] req_header The HTTP request header structure
+ * @param[out] res_header The HTTP response header structure to be filled
+ * @param[in] server_config The server configuration
+ * @return This function does not return a value
+ */
 void serve_dir(const int connfd, Http_request_header req_header, Http_response_header res_header, Server_config server_config)
 {
     char response[MAX_HEADER_SIZE];
@@ -384,6 +382,20 @@ void serve_dir(const int connfd, Http_request_header req_header, Http_response_h
     }
 }
 
+/**
+ * @brief Serves an HTTP request
+ *
+ * This function takes a connection file descriptor, an HTTP request header, an HTTP response header, and
+ * a server configuration as input. It constructs the full path to the requested resource, checks if it's a
+ * file or a directory, and calls the appropriate function to serve the resource. If there is an error during
+ * the process, it prints an error message and returns.
+ *
+ * @param[in] connfd The connection file descriptor
+ * @param[in] req_header The HTTP request header structure
+ * @param[out] res_header The HTTP response header structure to be filled
+ * @param[in] server_config The server configuration
+ * @return This function does not return a value
+ */
 void serve_request(const int connfd, Http_request_header req_header, Http_response_header res_header, Server_config server_config)
 {
     // create state machine either in serve file or server dir
@@ -411,6 +423,19 @@ void serve_request(const int connfd, Http_request_header req_header, Http_respon
     }
 }
 
+/**
+ * @brief Serves a 404 Not Found HTTP response
+ *
+ * This function takes a connection file descriptor, an HTTP request header, an HTTP response header, and a
+ * server configuration as input. It sets the response status to 404 Not Found, sets the requested path to
+ * the 404 error page, and calls the serve_request function to serve the error page.
+ *
+ * @param[in] connfd The connection file descriptor
+ * @param[in] req_header The HTTP request header structure
+ * @param[out] res_header The HTTP response header structure to be filled
+ * @param[in] server_config The server configuration
+ * @return This function does not return a value
+ */
 void serve_request_404(const int connfd, Http_request_header req_header, Http_response_header res_header, Server_config server_config)
 {
     memset(&res_header.content_type, 0, sizeof(res_header.content_type));
@@ -419,10 +444,43 @@ void serve_request_404(const int connfd, Http_request_header req_header, Http_re
     strcpy(res_header.additional_headers, "Server: tinyserver\r\n");
     strcpy(res_header.connection, "close");
     strcpy(req_header.path, "/404.html");
-    serve_request(connfd, req_header, res_header, server_config);
-    return;
-}
 
+    // Create the 404 page
+    // char *page_404 = "<!DOCTYPE html>\r\n"
+    //                  "<html><head><title>404 Not Found</title></head>\r\n"
+    //                  "<body>\r\n"
+    //                  "<h1>404 Not Found</h1>\r\n"
+    //                  "<p>The requested URL was not found on this server. Please check the URL or contact support if you need assistance.</p>\r\n"
+    //                  "</body></html>\r\n";
+
+    // Calculate the size of the 404 page
+    long file_size = strlen(page_404);
+
+    // Call send_response
+    send_response(connfd, res_header, file_size);
+
+    // Send the 404 page
+    ssize_t len = strlen(page_404);
+    ssize_t bytes_sent = send(connfd, page_404, len, 0);
+    if (bytes_sent < 0)
+    {
+        perror("sending 404 page failed");
+    }
+}
+/**
+ * @brief Handles an HTTP POST request
+ *
+ * This function takes a connection file descriptor, an HTTP request header, an HTTP response header, and
+ * a server configuration as input. It checks the path and the MIME type of the request. If the path is "/",
+ * it ignores the request. If the MIME type is "application/json", it saves the JSON body and serves the request.
+ * Otherwise, it just prints a message.
+ *
+ * @param[in] connfd The connection file descriptor
+ * @param[in] req_header The HTTP request header structure
+ * @param[out] res_header The HTTP response header structure to be filled
+ * @param[in] server_config The server configuration
+ * @return This function does not return a value
+ */
 void http_post_handler(const int connfd, Http_request_header req_header, Http_response_header res_header, Server_config server_config)
 {
     printf("POST request\n");
@@ -431,7 +489,7 @@ void http_post_handler(const int connfd, Http_request_header req_header, Http_re
     if (strcmp(req_header.path, "/") == 0)
     {
         printf("POST request to /\n");
-        return;
+        serve_request_404(connfd, req_header, res_header, server_config);
         // serve_request(client->connfd, req_header, res_header, server_config);
     }
     else
@@ -442,18 +500,29 @@ void http_post_handler(const int connfd, Http_request_header req_header, Http_re
             printf("POST JSON request\n");
             save_json(req_header.path, req_header.body);
             serve_request(connfd, req_header, res_header, server_config);
-            // serve_request_json(client->connfd, req_header, res_header, server_config);
         }
         else
         {
             printf("text POST request\n");
-            // serve_request(client->connfd, req_header, res_header, server_config);
+            save_file(req_header.path, req_header.body);
+            serve_request(connfd, req_header, res_header, server_config);
         }
     }
 }
 
+/**
+ * @brief Handles an HTTP GET request
+ *
+ * This function takes a connection file descriptor, an HTTP request header, an HTTP response header, and a server configuration as input. It checks if the requested file exists. If it does, it serves the file. If it doesn't, it serves a 404 Not Found response.
+ *
+ * @param[in] connfd The connection file descriptor
+ * @param[in] req_header The HTTP request header structure
+ * @param[out] res_header The HTTP response header structure to be filled
+ * @param[in] server_config The server configuration
+ * @return This function does not return a value
+ */
 void http_get_handler(const int connfd, Http_request_header req_header, Http_response_header res_header, Server_config server_config)
-{   
+{
     printf("GET request\n");
     // check if target file exists
     if (file_exists(req_header.path, server_config.root_dir))
@@ -469,7 +538,19 @@ void http_get_handler(const int connfd, Http_request_header req_header, Http_res
     }
 }
 
-void handle_client(Http_client *client, Server_config server_config)
+/**
+ * @brief Handles an HTTP client
+ *
+ * This function takes an HTTP client and a server configuration as input. It sets up a response
+ * header, and then enters a loop where it waits for a request from the client. If a request is received,
+ * it handles the request based on its method (GET or POST). If the connection is set to keep-alive, it
+ * continues to wait for more requests; otherwise, it closes the connection.
+ *
+ * @param[in] client The HTTP client to be handled
+ * @param[in] server_config The server configuration
+ * @return This function does not return a value
+ */
+void handle_client_persistent(Http_client *client, Server_config server_config)
 {
     printf("\033[33mThread %ld\033[0m\n", pthread_self());
 
@@ -528,6 +609,8 @@ void handle_client(Http_client *client, Server_config server_config)
                 keep_alive = false;
                 // res_header.connection = "close";
                 strcpy(res_header.connection, "close");
+                memset(&res_header.additional_headers, 0, sizeof(res_header.additional_headers));
+                strcpy(res_header.additional_headers, "Server: tinyserver\r\n");
                 printf("Connection is close\n");
             }
 
@@ -544,92 +627,85 @@ void handle_client(Http_client *client, Server_config server_config)
     } while (keep_alive);
 }
 
+void handle_client(Http_client *client, Server_config server_config)
+{
+    printf("\033[33mThread %ld\033[0m\n", pthread_self());
+
+    Http_response_header res_header;
+    memset(&res_header, 0, sizeof(res_header));
+
+    strcpy(res_header.status_code, "200");
+    strcpy(res_header.status_message, "OK");
+    strcpy(res_header.additional_headers, "Server: tinyserver\r\n");
+    strcpy(res_header.connection, "close");
+
+    Http_request_header req_header;
+
+    if (handle_http_request(client->connfd, &req_header) == -1)
+    {
+        printf("client closed connection or timeout\n");
+        close(client->connfd);
+        return;
+    }
+
+    // now it is time to serve the request (respond)
+    if (req_header.method == HTTP_GET)
+    {
+        http_get_handler(client->connfd, req_header, res_header, server_config);
+    }
+    else if (req_header.method == HTTP_POST)
+    {
+        http_post_handler(client->connfd, req_header, res_header, server_config);
+    }
+
+    close(client->connfd);
+}
+
+/**
+ * @brief A wrapper function for handling an HTTP client in a new thread
+ *
+ * This function takes a pointer to a Thread_args structure as input, which contains an HTTP client and
+ * a server configuration. It calls the handle_client function to handle the client, and then frees the
+ * memory allocated for the Thread_args structure.
+ *
+ * @param[in] arg A pointer to a Thread_args structure containing the HTTP client to be handled and the server configuration
+ * @return This function does not return a value
+ */
 void *handle_client_wrapper(void *arg)
 {
     Thread_args *args = (Thread_args *)arg;
     Http_client *client = args->client;
     Server_config *server_config = args->server_config;
 
-    handle_client(client, *server_config);
+    if (server_config->enable_keep_alive == ON)
+        handle_client_persistent(client, *server_config);
+    else
+        handle_client(client, *server_config);
 
     free(args); // Don't forget to free the memory when you're done
 
     return NULL;
 }
 
-long get_memory_usage()
-{
-    FILE *fp;
-    char buf[BUF_SIZE];
-    long mem_usage;
-
-    /* Open the /proc/self/status file. */
-    fp = fopen("/proc/self/status", "r");
-    if (fp == NULL)
-    {
-        perror("Failed to open /proc/self/status");
-        return -1;
-    }
-
-    /* Read the entire contents. */
-    while (fgets(buf, BUF_SIZE, fp) != NULL)
-    {
-        /* The VmRSS value contains the resident set size, i.e., the portion of the process's memory that is held in RAM. */
-        if (strncmp(buf, "VmRSS:", 6) == 0)
-        {
-            sscanf(buf, "%*s %ld", &mem_usage);
-            break;
-        }
-    }
-
-    fclose(fp);
-
-    return mem_usage; /* kB */
-}
-
-double calculate_cpu_usage()
-{
-    struct rusage usage;
-    struct timeval start, end;
-    long sec, usec;
-    double cpu_time, wall_time;
-
-    // Get the number of CPU cores
-    int num_cores = sysconf(_SC_NPROCESSORS_ONLN);
-
-    // Get the start time
-    getrusage(RUSAGE_SELF, &usage);
-    start = usage.ru_utime;
-
-    // TODO: Insert the code you want to measure here
-
-    // Get the end time
-    getrusage(RUSAGE_SELF, &usage);
-    end = usage.ru_utime;
-
-    // Calculate the CPU time (in seconds)
-    sec = end.tv_sec - start.tv_sec;
-    usec = end.tv_usec - start.tv_usec;
-    cpu_time = sec + usec / 1e6;
-
-    // Calculate the wall time (in seconds)
-    // TODO: Replace this with the actual wall time
-    wall_time = 1.0;
-
-    // Calculate the CPU usage
-    double cpu_usage = cpu_time / num_cores / wall_time * 100;
-
-    return cpu_usage;
-}
-
-// https://stackoverflow.com/questions/8501706/how-to-get-the-cpu-usage-in-c - this helped with figuring out how to get the CPU usage
-
+/**
+ * @brief Starts the HTTP server
+ *
+ * This function takes an HTTP server and command line arguments as input. It sets the server configuration with
+ * default or provided values, creates a socket, binds it to the specified port, and starts listening for connections.
+ * If there is an error during the process, it prints an error message and returns.
+ *
+ * @param[in] server The HTTP server to be started
+ * @param[in] argc The number of command line arguments
+ * @param[in] argv The command line arguments
+ * @return This function does not return a value
+ */
 void start_server(Http_server *server, int argc, char *argv[])
 {
     // Set default values
     strcpy(server->config.port, DEFAULT_PORT);
     strcpy(server->config.root_dir, DEFAULT_ROOT_DIR);
     server->config.enable_mt = ON;
+    server->config.enable_keep_alive = OFF;
 
     // Override with command line arguments if provided
     if (argc > 1)
@@ -651,6 +727,17 @@ void start_server(Http_server *server, int argc, char *argv[])
             server->config.enable_mt = OFF;
         }
     }
+    if (argc > 4)
+    {
+        if (strcmp(argv[3], "on") == 0)
+        {
+            server->config.enable_keep_alive = ON;
+        }
+        else if (strcmp(argv[3], "off") == 0)
+        {
+            server->config.enable_keep_alive = OFF;
+        }
+    }
     check_err((server->sockfd = socket(AF_INET, SOCK_STREAM, 0)), "Socket error");
 
     server->server_addr.sin_family = AF_INET;
@@ -668,6 +755,19 @@ void start_server(Http_server *server, int argc, char *argv[])
     printf("root dir: %s\n", server->config.root_dir);
 }
 
+/**
+ * @brief Accepts a client connection and adds it to the thread pool
+ *
+ * This function takes an HTTP server, a thread pool, and a pointer to the connection count as input.
+ * It accepts a client connection, increments the connection count, and adds a task to the thread pool to
+ * handle the client. The task is a call to the handle_client_wrapper function with a Thread_args structure
+ * containing the client and the server configuration.
+ *
+ * @param[in] server The HTTP server
+ * @param[in] pool The thread pool
+ * @param[out] connection_count A pointer to the connection count
+ * @return This function does not return a value
+ */
 void accept_client(Http_server *server, ThreadPool *pool, int *connection_count)
 {
     Http_client *client = malloc(sizeof(Http_client));
@@ -683,35 +783,11 @@ void accept_client(Http_server *server, ThreadPool *pool, int *connection_count)
     args->client = client;
     args->server_config = &server->config;
 
-    thread_pool_add_task(pool, handle_client_wrapper, (void *)args);
-}
-
-void calculate_usage(struct timeval start, struct timeval wall_start)
-{
-    struct rusage usage;
-    struct timeval end, wall_end;
-    long sec, usec;
-    double cpu_time, wall_time;
-
-    // Get the number of CPU cores
-    int num_cores = sysconf(_SC_NPROCESSORS_ONLN);
-
-    // Get the end time
-    getrusage(RUSAGE_SELF, &usage);
-    end = usage.ru_utime;
-    gettimeofday(&wall_end, NULL); // Get the wall end time
-
-    // Calculate the CPU time (in seconds)
-    sec = end.tv_sec - start.tv_sec;
-    usec = end.tv_usec - start.tv_usec;
-    cpu_time = sec + usec / 1e6;
-
-    // Calculate the wall time (in seconds)
-    wall_time = (wall_end.tv_sec - wall_start.tv_sec) + (wall_end.tv_usec - wall_start.tv_usec) / 1e6;
-
-    // Calculate the CPU usage
-    double cpu_usage = cpu_time / num_cores / wall_time * 100;
-    long mem_usage = get_memory_usage();
-    printf("CPU Usage: %.2lf%%\n", cpu_usage);
-    printf("Memory Usage: %ld kB\n", mem_usage);
+    if (server->config.enable_mt == OFF)
+        if (server->config.enable_keep_alive == ON)
+            handle_client_persistent(client, server->config);
+        else
+            handle_client(client, server->config);
+    else
+        thread_pool_add_task(pool, handle_client_wrapper, (void *)args);
 }
