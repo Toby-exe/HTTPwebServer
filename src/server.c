@@ -702,6 +702,7 @@ void *handle_client_wrapper(void *arg)
 void start_server(Http_server *server, int argc, char *argv[])
 {
     // Set default values
+    // Set default values
     strcpy(server->config.port, DEFAULT_PORT);
     strcpy(server->config.root_dir, DEFAULT_ROOT_DIR);
     server->config.enable_mt = ON;
@@ -710,52 +711,34 @@ void start_server(Http_server *server, int argc, char *argv[])
     server->config.enable_stats = OFF;
 
     // Override with command line arguments if provided
-    if (argc > 1)
+    int opt;
+    while ((opt = getopt(argc, argv, "p:r:m:k:t:s:")) != -1)
     {
-        strcpy(server->config.port, argv[1]);
-    }
-    if (argc > 2)
-    {
-        strcpy(server->config.root_dir, argv[2]);
-    }
-    if (argc > 3)
-    {
-        if (strcmp(argv[3], "on") == 0)
+        switch (opt)
         {
-            server->config.enable_mt = ON;
-        }
-        else if (strcmp(argv[3], "off") == 0)
-        {
-            server->config.enable_mt = OFF;
-        }
-    }
-    if (argc > 4)
-    {
-        if (strcmp(argv[3], "on") == 0)
-        {
-            server->config.enable_keep_alive = ON;
-        }
-        else if (strcmp(argv[3], "off") == 0)
-        {
-            server->config.enable_keep_alive = OFF;
+        case 'p':
+            strcpy(server->config.port, optarg);
+            break;
+        case 'r':
+            strcpy(server->config.root_dir, optarg);
+            break;
+        case 'm':
+            server->config.enable_mt = (strcmp(optarg, "on") == 0) ? ON : OFF;
+            break;
+        case 'k':
+            server->config.enable_keep_alive = (strcmp(optarg, "on") == 0) ? ON : OFF;
+            break;
+        case 't':
+            server->config.num_threads = atoi(optarg);
+            break;
+        case 's':
+            server->config.enable_stats = (strcmp(optarg, "on") == 0) ? ON : OFF;
+            break;
+        default:
+            fprintf(stderr, "Usage: %s [-p port] [-r root_dir] [-m enable_mt] [-k enable_keep_alive] [-t num_threads] [-s enable_stats]\n", argv[0]);
+            exit(EXIT_FAILURE);
         }
     }
-    if (argc > 5)
-    {
-        server->config.num_threads = atoi(argv[5]);
-    }
-    if (argc > 6)
-    {
-        if (strcmp(argv[6], "on") == 0)
-        {
-            server->config.enable_stats = ON;
-        }
-        else if (strcmp(argv[6], "off") == 0)
-        {
-            server->config.enable_stats = OFF;
-        }
-    }
-
 
     check_err((server->sockfd = socket(AF_INET, SOCK_STREAM, 0)), "Socket error");
 
@@ -852,7 +835,7 @@ void calculate_usage(struct timeval start, struct timeval wall_start)
     struct sockaddr_in dest_addr;
     memset(&dest_addr, 0, sizeof(dest_addr));
     dest_addr.sin_family = AF_INET;
-    dest_addr.sin_port = htons(18000); // The port number to send data to
+    dest_addr.sin_port = htons(18000);                      // The port number to send data to
     dest_addr.sin_addr.s_addr = inet_addr("10.65.255.109"); // The destination IP address
 
     // Format the usage statistics as a string
