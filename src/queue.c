@@ -1,3 +1,9 @@
+/**
+ * @file queue.c
+ * @authors Jayden Mingle
+ *
+ * @date 2023-11-30
+ */
 #include "queue.h"
 
 Queue *queue_create()

@@ -706,6 +706,8 @@ void start_server(Http_server *server, int argc, char *argv[])
     strcpy(server->config.root_dir, DEFAULT_ROOT_DIR);
     server->config.enable_mt = ON;
     server->config.enable_keep_alive = OFF;
+    server->config.num_threads = DEFAULT_NUM_THREADS;
+    server->config.enable_stats = OFF;
 
     // Override with command line arguments if provided
     if (argc > 1)
@@ -738,6 +740,23 @@ void start_server(Http_server *server, int argc, char *argv[])
             server->config.enable_keep_alive = OFF;
         }
     }
+    if (argc > 5)
+    {
+        server->config.num_threads = atoi(argv[5]);
+    }
+    if (argc > 6)
+    {
+        if (strcmp(argv[6], "on") == 0)
+        {
+            server->config.enable_stats = ON;
+        }
+        else if (strcmp(argv[6], "off") == 0)
+        {
+            server->config.enable_stats = OFF;
+        }
+    }
+
+
     check_err((server->sockfd = socket(AF_INET, SOCK_STREAM, 0)), "Socket error");
 
     server->server_addr.sin_family = AF_INET;
@@ -790,4 +809,66 @@ void accept_client(Http_server *server, ThreadPool *pool, int *connection_count)
             handle_client(client, server->config);
     else
         thread_pool_add_task(pool, handle_client_wrapper, (void *)args);
+}
+
+void calculate_usage(struct timeval start, struct timeval wall_start)
+{
+    struct rusage usage;
+    struct timeval end, wall_end;
+    long sec, usec;
+    double cpu_time, wall_time;
+
+    // Get the number of CPU cores
+    int num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+
+    // Get the end time
+    getrusage(RUSAGE_SELF, &usage);
+    end = usage.ru_utime;
+    gettimeofday(&wall_end, NULL); // Get the wall end time
+
+    // Calculate the CPU time (in seconds)
+    sec = end.tv_sec - start.tv_sec;
+    usec = end.tv_usec - start.tv_usec;
+    cpu_time = sec + usec / 1e6;
+
+    // Calculate the wall time (in seconds)
+    wall_time = (wall_end.tv_sec - wall_start.tv_sec) + (wall_end.tv_usec - wall_start.tv_usec) / 1e6;
+
+    // Calculate the CPU usage
+    double cpu_usage = cpu_time / num_cores / wall_time * 100;
+    long mem_usage = get_memory_usage();
+    printf("CPU Usage: %.2lf%%\n", cpu_usage);
+    printf("Memory Usage: %ld kB\n", mem_usage);
+
+    // Create a UDP socket
+    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sockfd < 0)
+    {
+        perror("socket");
+        return;
+    }
+
+    // Initialize the destination address and port
+    struct sockaddr_in dest_addr;
+    memset(&dest_addr, 0, sizeof(dest_addr));
+    dest_addr.sin_family = AF_INET;
+    dest_addr.sin_port = htons(18000); // The port number to send data to
+    dest_addr.sin_addr.s_addr = inet_addr("10.65.255.109"); // The destination IP address
+
+    // Format the usage statistics as a string
+    char buffer[256];
+    snprintf(buffer, 256, "CPU Usage: %.2lf%%\nMemory Usage: %ld kB\n", cpu_usage, mem_usage);
+
+    // Send the usage statistics to the destination socket
+    int bytes = sendto(sockfd, buffer, strlen(buffer), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+    if (bytes < 0)
+    {
+        perror("sendto");
+        close(sockfd);
+        return;
+    }
+    printf("Sent %d bytes to port %d\n", bytes, 8080);
+
+    // Close the socket
+    close(sockfd);
 }

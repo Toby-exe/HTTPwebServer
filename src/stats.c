@@ -1,5 +1,15 @@
 #include "stats.h"
 
+/**
+ * @brief Retrieves the memory usage of the process
+ *
+ * This function opens the /proc/self/status file and reads its contents to find the resident set size (VmRSS), 
+ * which is the portion of the process's memory that is held in RAM. It then returns this value.
+ * 
+ * @param[in] None
+ * @param[out] None
+ * @return The memory usage of the process in kilobytes (kB). If the file fails to open, it returns -1.
+ */
 long get_memory_usage()
 {
     FILE *fp;
@@ -30,8 +40,16 @@ long get_memory_usage()
     return mem_usage; /* kB */
 }
 
-
-// https://stackoverflow.com/questions/8501706/how-to-get-the-cpu-usage-in-c - this helped with figuring out how to get the CPU usage
+/**
+ * @brief Calculates the CPU usage
+ *
+ * This function calculates the CPU usage by first getting the number of CPU cores and the start time. 
+ * It then measures the CPU time and wall time, and finally calculates the CPU usage.
+ * 
+ * @param[in] None
+ * @param[out] None
+ * @return The CPU usage as a double
+ */
 double calculate_cpu_usage()
 {
     struct rusage usage;
@@ -65,34 +83,4 @@ double calculate_cpu_usage()
     double cpu_usage = cpu_time / num_cores / wall_time * 100;
 
     return cpu_usage;
-}
-
-void calculate_usage(struct timeval start, struct timeval wall_start)
-{
-    struct rusage usage;
-    struct timeval end, wall_end;
-    long sec, usec;
-    double cpu_time, wall_time;
-
-    // Get the number of CPU cores
-    int num_cores = sysconf(_SC_NPROCESSORS_ONLN);
-
-    // Get the end time
-    getrusage(RUSAGE_SELF, &usage);
-    end = usage.ru_utime;
-    gettimeofday(&wall_end, NULL); // Get the wall end time
-
-    // Calculate the CPU time (in seconds)
-    sec = end.tv_sec - start.tv_sec;
-    usec = end.tv_usec - start.tv_usec;
-    cpu_time = sec + usec / 1e6;
-
-    // Calculate the wall time (in seconds)
-    wall_time = (wall_end.tv_sec - wall_start.tv_sec) + (wall_end.tv_usec - wall_start.tv_usec) / 1e6;
-
-    // Calculate the CPU usage
-    double cpu_usage = cpu_time / num_cores / wall_time * 100;
-    long mem_usage = get_memory_usage();
-    printf("CPU Usage: %.2lf%%\n", cpu_usage);
-    printf("Memory Usage: %ld kB\n", mem_usage);
 }

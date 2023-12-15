@@ -1,3 +1,19 @@
+/**
+ * @file queue.h
+ * @brief A library for operations on a queue.
+ * @authors 
+ * 
+ * Details: 
+ * This queue is implemented as a doubly-linked list. Each node in the queue contains a pointer to the data it holds    
+ * and pointers to the next and previous nodes in the queue. The queue itself keeps track of its length and has pointers  
+ * to the head and tail nodes. The queue can grow and shrink dynamically as nodes are added and removed.
+ * 
+ * Assumptions/Limitations: 
+ * This implementation assumes that the data stored in each node has been
+ * already been properly allocated and that the caller is responsible for managing this memory.
+ * 
+ * @date 2023-12-04
+ */
 #ifndef QUEUE_H
 #define QUEUE_H
 
@@ -41,7 +57,7 @@ extern void *dequeue(Queue *queue);
 /* ----------{ STRUCTURES AND TYPES }---------- */
 
 // typedef struct Queue {
-//     volatile Http_client buffer[BUFFER_SIZE];    /* the bounded buffer */
+//     volatile void *buffer[BUFFER_SIZE];          /* the bounded buffer */
 //     volatile int head;                           /* index of next enqueue */
 //     volatile int tail;                           /* index of next dequeue */
 //     volatile int fill_level;                     /* fill level of buffer */

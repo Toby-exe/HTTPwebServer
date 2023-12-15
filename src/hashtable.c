@@ -7,20 +7,22 @@
 #include "hashtable.h"
 
 /**
- * Since a hash table can store any type of data, there isn't one function that can
- * that can be used to hash every type of value. For example, our server uses this library
- * for storing and retrieving MIME types. This involves hashing a string 
- * representing a file extension into an index. Another different program could be a 
- * bank account manager. In that case, the key could be a long representing the account number of a customer
- * which would need a very different hash function.
-*/
+ * @brief Creates a new hash table
+ *
+ * Details: This function creates a new hash table of a given size and uses the provided hash function. 
+ *          If the function receives an invalid size or isn't given a hash function, default values are used.
+ * 
+ * @param[in] size The size of the hash table
+ * @param[in] hashf The hash function to be used
+ * @return A pointer to the newly created hash table, or NULL if memory allocation failed
+ */
 extern HashTable *Hashtable_create(int size, int (*hashf)(void *, int, int))
 {
     if (size < 1) {
         size = DEFAULT_SIZE;
     }
 
-    if (hashf == NULL) {    //use default hash function
+    if (hashf == NULL) {    // use default hash function
         hashf = str_hashf;
     }
 
@@ -43,6 +45,16 @@ extern HashTable *Hashtable_create(int size, int (*hashf)(void *, int, int))
     return ht;
 }
 
+/**
+ * @brief Destroys a hash table
+ *
+ * Details: This function deallocates the memory used by the hash table and its entries.
+ *          The linked list in each bucket is destroyed as well as the HtEntry's stored in each
+ *          node. However the key and data inside an entry are not freed. The caller is responsible
+ *          for this.
+ * 
+ * @param[in] ht The hash table to be destroyed
+ */
 void Hashtable_destroy(HashTable *ht)
 {
     for (int i = 0; i < ht->size; i++) 
@@ -57,7 +69,14 @@ void Hashtable_destroy(HashTable *ht)
 }
 
 /**
- * Put to hash table with a string key (for LRU cache)
+ * @brief Inserts a key-value pair into a hash table using a string key
+ *
+ * Details: Wrapper function that specifies use of a string key.
+ * 
+ * @param[in] ht A pointer to a hash table
+ * @param[in] key A pointer to a string key
+ * @param[in] data A pointer to a value
+ * @return The value that was inserted, or NULL if the insertion failed
  */
 void *Hashtable_put(HashTable *ht, char *key, void *data)
 {
@@ -65,13 +84,22 @@ void *Hashtable_put(HashTable *ht, char *key, void *data)
 }
 
 /**
- * Put to hash table with a binary key
+ * @brief Inserts a key-value pair into the hash table
+ *
+ * Details: This function inserts a key-value pair into the hash table. The key and
+ *          value can point to an object of any data type. Creates a HtEntry instance
+ *          containing the passed in key and value and appends it to the end of
+ *          the bucket that the key hashes to. The hash table's size and load_factor are updated accordingly
+ * 
+ * @param[in, out] ht A pointer to a hash table
+ * @param[in] key A pointer to a key
+ * @param[in] key_size The size of the key
+ * @param[in] data A pointer to a value
+ * @return The value that was inserted, or NULL if the insertion failed
  */
 void *Hashtable_put_bin(HashTable *ht, void *key, int key_size, void *data)
 {
     int index = ht->hashf(key, key_size, ht->size);
-
-    // printf("hashed key is %d\n", index);
 
     LinkedList *list = ht->buckets[index];
 
@@ -97,7 +125,13 @@ void *Hashtable_put_bin(HashTable *ht, void *key, int key_size, void *data)
 }
 
 /**
- * Get value from the hash table with a string key (for LRU cache)
+ * @brief Retrieves a value from the hash table using a string key
+ *
+ * Details: Wrapper function that specifies use of a string key.
+ * 
+ * @param[in] ht A pointer to a hash table
+ * @param[in] key A pointer to a string key
+ * @return The value associated with the key, or NULL if the key is not found
  */
 void *Hashtable_get(HashTable *ht, char *key)
 {
@@ -105,7 +139,16 @@ void *Hashtable_get(HashTable *ht, char *key)
 }
 
 /**
- * Get from the hash table with a binary data key
+ * @brief Retrieves a value from the hash table
+ *
+ * Details: This function uses the hashed key to determine which bucket the value is in.
+ *          Using a custom comparison function to compare two HtEntry's, it searches for
+ *          a matching value in the bucket's linked list. 
+ * 
+ * @param[in] ht A pointer to a hash table
+ * @param[in] key A pointer to a key
+ * @param[in] key_size The size of the key
+ * @return The value associated with the key, or NULL if the key is not found
  */
 void *Hashtable_get_bin(HashTable *ht, void *key, int key_size)
 {
@@ -127,17 +170,32 @@ void *Hashtable_get_bin(HashTable *ht, void *key, int key_size)
 }
 
 /**
- * Delete from the hashtable by string key (for LRU cache)
+ * @brief Deletes a key-value pair from the hash table using a string key
+ *
+ * Details: Wrapper function that specifies use of a string key.
+ * 
+ * @param[in] ht A pointer to a hash table
+ * @param[in] key A pointer to a string key
+ * @return The value that was deleted, or NULL if the key was not found
  */
 void *Hashtable_delete(HashTable *ht, char *key)
 {
     return Hashtable_delete_bin(ht, key, strlen(key));
 }
 
+
 /**
- * Delete from the hashtable by binary key
+ * @brief Retrieves a value from the hash table
  *
- * NOTE: does *not* free the data--just free's the hash table entry
+ * Details: Uses the same method as Hashtable_get() to find the HtEntry containing the
+ *          desired key. The HtEntry is removed from the linked list and it's memory is
+ *          deallocated. note that it does not free the data - just free's the hash table entry.
+ *          The hash table's size and load_factor are updated accordingly
+ * 
+ * @param[in, out] ht A pointer to a hash table
+ * @param[in] key A pointer to a key
+ * @param[in] key_size The size of the key
+ * @return The value that was deleted, or NULL if the key was not found
  */
 void *Hashtable_delete_bin(HashTable *ht, void *key, int key_size)
 {
@@ -166,45 +224,29 @@ void *Hashtable_delete_bin(HashTable *ht, void *key, int key_size)
 }
 
 /**
- * @brief Do something for each entry in a hash table
+ * @brief Frees a hash table entry
  *
- * @param[in] ht A pointer to a hash table
- * @param[in] f The function to perform on each entry
- * @param[in] arg arguments of the applied function
+ * Deatils: This function frees only a hash table entry, not the key and data inside of it.
+ * 
+ * @param[in] htent The hash table entry to be freed
+ * @param[in] arg An argument that is not used in this function
  */
-extern void Hashtable_foreach(HashTable *ht, void (*f)(void *, void *), void *arg)
-{
-    return;
-}
-
-/**
- * @brief Resizes a hashtable based on a growth factor
- * 
- * Details: Since chaining is used for collision resolution, there may be cases where hash table entries
- *          pile up in one bucket, increasing search time. This issue is resolved by resizing the table 
- *          if load_factor grows above 60% or if a single list gets longer than 5 elements.
- * 
- * @param[in] ht A pointer to the hash table to resize
-*/
-extern HashTable *Hashtable_resize(HashTable *ht)
-{
-    return NULL;
-}
-
 void free_htentry(void *htent, void *arg)
 {
-    (void)arg;  // function passed into foreach must have 2 parameters
-    
-    HtEntry *free_ent = (HtEntry *)htent;
-    //free(free_ent->data); //can't do this because delete needs data to return
-    free(free_ent->key);
+    (void)arg;
 	free(htent);
 }
 
 /**
- * Don't need to compare the entries to see if they're literally the same Hash table entry
- * they just need to have the same key.
-*/
+ * @brief Compares two hash table entries
+ *
+ * Details: This function compares two hash table entries based on their keys. 
+ *          It does not check if they are the same entry.
+ * 
+ * @param[in] a The first hash table entry
+ * @param[in] b The second hash table entry
+ * @return returns 0 if the keys of the hash table entries are identical, non-zero otherwise
+ */
 extern int Hashtable_cmpfn(void *a, void *b)
 {
     HtEntry *entryA = a, *entryB = b;
@@ -219,6 +261,14 @@ extern int Hashtable_cmpfn(void *a, void *b)
     return memcmp(entryA->key, entryB->key, entryA->key_size);
 }
 
+/**
+ * @brief Updates the number of entries and the load factor of the hash table
+ *
+ * Details: These values of a hash table are updated based on a given delta.
+ * 
+ * @param[in] ht The hash table
+ * @param[in] d The delta to be added to the number of entries
+ */
 void Hashtable_update(HashTable *ht, int d)
 {
     ht->num_entries += d;
@@ -226,23 +276,42 @@ void Hashtable_update(HashTable *ht, int d)
 }
 
 /**
- * Details: based on the Robin-Karp rolling hash function
- *          This hash function turns a string key into an index in the buckets array
- *          and each bucket contains a linked list.
+ * @brief Hashes a string key into an index in the buckets array.
+ * 
+ * @param[in] key The key to be hashed
+ * @param[in] data_size The size of the key
+ * @param[in] table_size The size of the hash table
+ * @return The hashed key
  */
 int str_hashf(void *key, int data_size, int table_size) 
 {
-    const int R = 31; // Small prime
-    int h = 0;
-    unsigned char *p = key;
+    const int R = 31; // random prime number
+    int hashed_key = 0;
+    unsigned char *c = key;
 
     for (int i = 0; i < data_size; i++) {
-        h = (R * h + p[i]) % table_size;
+        hashed_key = (R * hashed_key + c[i]) % table_size;
     }
 
-    return h;
+    return hashed_key;
 }
 
+/**
+ * @brief Displays the hash table
+ *
+ * Details: This function prints each bucket of the hash table as a linked list, displaying
+ *          each node's data.
+ *          Uses a similar format as llist_display():
+ * 
+ *          +---+        +---+        +---+
+ *          | a |  --->  | b |  --->  | c | 
+ *          +---+        +---+        +---+
+ *          | d |  --->  | e |
+ *          +---+        +---+
+ * 
+ * @param[in] ht The hash table
+ * @param[in] printfn The function used to print the data in the hash table entries
+ */
 void Hashtable_display(HashTable *ht, void (*printfn)(void *))
 {
     for(int i = 0; i < ht->size; i++)

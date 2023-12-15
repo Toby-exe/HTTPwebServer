@@ -1,13 +1,24 @@
 /**
  * @file hashtable.h
- * @brief A library for hash tables
+ * @brief A library for hash table operations
  * @authors Jayden Mingle
  * 
- * Details: A hash table in this library is generic, meaning you can make a hash table
- *          that uses any type as a key and that can store any type.
- *          Chaining is used for collision resolution via the linked list library.
+ * Details:
+ * This file contains the structure definitions and function prototypes for creating 
+ * and manipulating a hash table. 
+ * A hash table in this library is generic, meaning you can make a hash table
+ * that uses any data type as a key and that can store any data type. Chaining 
+ * is used for collision resolution via the linked list library.
  * 
- * @date 2023-11-30
+ * Assumptions/Limitations:
+ * This implementation assumes that the key and data stored in each hash table entry has been
+ * properly allocated and that the user is responsible for managing this memory. 
+ * Since the key and data fields of an entry can contain anything, 
+ * when we delete an entry from the hash table using the entry's key, 
+ * we only free the entry itself. We assume that freeing the data
+ * will be done by the caller at the appropraite time before the program executes.
+ * 
+ * @date 2023-12-1
  */
 #ifndef HASH_TABLE_H
 #define HASH_TABLE_H
@@ -27,10 +38,10 @@ typedef struct {
     int key_size;
     int hashed_key;
     void *data;
-} HtEntry;                  // Each node in a bucket contains a HtEntry
+} HtEntry;  /* Each node in a bucket contains a HtEntry */
 
 typedef struct {
-    LinkedList **buckets;   // OR Bucket *buckets; if chaining not used
+    LinkedList **buckets;
     int size;
     int num_entries;
     float load_factor;
@@ -56,10 +67,6 @@ extern void *Hashtable_get_bin(HashTable *ht, void *key, int key_size);
 /* ----------{ Remove methods }---------- */
 extern void *Hashtable_delete(HashTable *ht, char *key);
 extern void *Hashtable_delete_bin(HashTable *ht, void *key, int key_size);
-
-/* ----------{ Miscellaneous }---------- */
-extern void Hashtable_foreach(HashTable *ht, void (*f)(void *, void *), void *arg);
-extern HashTable *Hashtable_resize(HashTable *ht);
 
 /* ----------{ Helper Methods }---------- */
 extern void free_htentry(void *htent, void *arg);

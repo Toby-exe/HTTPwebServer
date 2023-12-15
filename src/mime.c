@@ -1,3 +1,9 @@
+/**
+ * @file mime.c
+ * @authors Jayden Mingle
+ *
+ * @date 2023-11-30
+ */
 #include "mime.h"
 
 HashTable *ext_to_mime;

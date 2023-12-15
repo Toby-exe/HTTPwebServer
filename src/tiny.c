@@ -28,7 +28,8 @@ int main(int argc, char *argv[])
     start_server(&server, argc, argv);
 
     create_mime_db();
-    ThreadPool *pool = thread_pool_create(8);
+    // ThreadPool *pool = thread_pool_create(1);
+    ThreadPool *pool = thread_pool_create(server.config.num_threads); // forgot to change back to this in submission
     int connection_count = 0;
 
     while (1)
@@ -42,7 +43,9 @@ int main(int argc, char *argv[])
         gettimeofday(&wall_start, NULL); // Get the wall start time
 
         accept_client(&server, pool, &connection_count);
-        calculate_usage(start, wall_start);
+        
+        if(server.config.enable_stats == ON) 
+            calculate_usage(start, wall_start);
     }
 
     destroy_mime_db();

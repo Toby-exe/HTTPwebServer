@@ -2,7 +2,7 @@
  * @file linkedlist.c
  * @authors Jayden Mingle
  *
- * @date 2023-11-30
+ * @date 2023-12-2
  */
 #include "linkedlist.h"
 
@@ -100,7 +100,7 @@ void *llist_get_head(LinkedList *list)
 /**
  * @brief finds the last element of a list
  *
- * @param[in] list A pointer to a linked list 
+ * @param[in] list A pointer to a linked list
  * @return A pointer to the data at the tail of the linked list
  */
 void *llist_get_tail(LinkedList *list)
@@ -124,7 +124,12 @@ void *llist_get_tail(LinkedList *list)
  * Details: Since there's no way to cover every case of what can be stored in data, 
  *          llist_find() can be given any function that compares any two things. 
  *          cmpfn (the comparison function) returns 0 if the node's data is equal.
- *          
+ * 
+ *          This function traverses the linked list and uses the provided comparison
+ *          function to find a node that matches the provided data. 
+ *          If a match is found, it returns a pointer to the data of the matching node. 
+ *          If no match is found or the list is empty, it returns NULL.
+ *     
  * @param[in] list A pointer to a linked list 
  * @param[in] data A pointer to some data to find in a node
  * @param[in] cmpfn(data1, data2) A function that compares two values of any type
@@ -168,7 +173,7 @@ void *llist_find(LinkedList *list, void *data, int (*cmpfn)(void *, void *))
  *          that the node is deleted. So freeing data is left for the libraries of those
  *          structures to handle.
  * 
- * @param[in] list A pointer to a linked list 
+ * @param[in, out] list A pointer to a linked list 
  * @param[in] data A pointer to some data to find in a node
  * @param[in] cmpfn(data1, data2) A function that compares two values of any type
  * @return A pointer to the data at a node in the linked list
@@ -209,7 +214,7 @@ void *llist_delete(LinkedList *list, void *data, int (*cmpfn)(void *, void *))
  * Details: The first node of the linked list is freed but its data is not.
  *          *** See explanation in llist_delete() ***
  *
- * @param[in] list A pointer to a linked list
+ * @param[in, out] list A pointer to a linked list
  * @return A pointer to the data at the head of the linked list
  */
 void *llist_delete_head(LinkedList *list)
@@ -305,7 +310,7 @@ int llist_count(LinkedList *list)
  * @brief Perform some operation on each item in a list
  *
  * @param[in] list A pointer to a linked list
- * @param[in] Func The function to perform on a node's data
+ * @param[in] Func A function that uses a node's data
  * @param[in] arg The arguments received by the function
  */
 void llist_foreach(LinkedList *list, void (*Func)(void *, void *), void *arg)
@@ -371,7 +376,7 @@ void llist_array_free(void **a)
  *          +---+        +---+        +---+
  * 
  *          Since there's no way to cover every case of what can be stored in data, 
- *          llist_delete() can be given any function that prints a single instance
+ *          llist_print() can be given any function that prints a single instance
  *          of a type of data.
  *
  * @param[in] list A pointer to a linked list

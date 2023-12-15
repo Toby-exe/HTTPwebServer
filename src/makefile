@@ -15,15 +15,15 @@ OBJS = $(SRCS:.c=.o)
 
 # Executable names
 EXEC_CLIENT = client_program
-EXEC_SERVER = server_program
+EXEC_SERVER = tinyserv
 
 all: $(EXEC_CLIENT) $(EXEC_SERVER)
 
 client: $(EXEC_CLIENT)
 
-server: $(EXEC_SERVER)
+tinyserv: $(EXEC_SERVER)
 
-$(EXEC_CLIENT): client.o $(filter-out server.o, $(OBJS))
+$(EXEC_CLIENT): client.o $(filter-out tiny.o, $(OBJS))
 	$(CC) $(CFLAGS) -o $@ $^
 
 $(EXEC_SERVER): $(filter-out client.o, $(OBJS))

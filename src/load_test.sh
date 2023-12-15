@@ -1,30 +1,15 @@
 #!/bin/bash
 
-# Define the URL of the server
-URL="http://10.65.255.109:7078/"
+# Usage: ./test.sh <url> <number_of_requests>
 
-# Define the duration of the test in seconds
-DURATION=60
+url=$1
+n=$2
+total_time=0
 
-# Define the number of requests per second
-TPS=1000
-
-# Calculate the end time
-end=$((SECONDS+$DURATION))
-
-# Start the load test
-while [ $SECONDS -lt $end ]; do
-  # Send TPS requests in parallel
-  for ((i=1;i<=$TPS;i++)); do
-    # Use curl to send a GET request and append the response time to a log file
-    curl -X GET $URL -o /dev/null -s -w '%{time_total}\n' >> response-times.log &
-  done
-  # Wait for one second
-  sleep 1
+for ((i=1;i<=n;i++)); do
+  time=$(curl -s -o /dev/null -w "%{time_total}" $url)
+  total_time=$(echo $total_time+$time | bc)
 done
 
-# Wait for all requests to finish
-wait
-
-# Print a message
-echo "Load test has been completed"
+average_time=$(echo "scale=4; $total_time / $n" | bc)
+echo "Average response time for $n requests to $url : $average_time seconds"

@@ -6,12 +6,12 @@
  * Details:
  * This file contains the structure definitions and function prototypes for creating 
  * and manipulating a non-circular, singly-linked list. 
- * A linked list in this library is generic, meaning you can make
- * a linked list that stores any type in each of it's nodes.
+ * A linked list in this library is generic, meaning you can make a linked list that 
+ * stores any type in each of it's nodes.
  * 
  * Assumptions/Limitations:
  * This implementation assumes that the data stored in each node has been
- * properly allocated and that the user is responsible for managing this memory. 
+ * already been properly allocated and that the caller is responsible for managing this memory. 
  * It does not provide any mechanism for deep copying or deep comparison of data elements.
  * Since the data field of a node can contain anything, when we remove a node from the list, 
  * we only free the node itself and not the data in it. We assume that freeing the data 
