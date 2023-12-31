@@ -8,12 +8,13 @@
 #include "server.h"
 
 const char html_start[] = "<html><head><style>"
-                          "body {font-family: Arial, sans-serif; margin:0; padding:0; background-color: #f0f0f0;}"
-                          "ul {list-style-type: none; margin: 0; padding: 0;}"
-                          "li {padding: 10px 0; border-bottom: 1px solid #ddd;}"
+                          "body {font-family: 'Helvetica Neue', sans-serif; margin:0; padding:0; background-color: #fafafa; color: #333;}"
+                          "ul {list-style-type: none; margin: 0; padding: 0; width: 100%; max-width: 600px; margin: auto;}"
+                          "li {padding: 20px; border-bottom: 1px solid #ddd; transition: background-color 0.2s ease; font-size: 20px; font-weight: bold;}"
                           "li:last-child {border-bottom: none;}"
-                          "li a {text-decoration: none; color: #333; display: block; padding: 10px;}"
-                          "li a:hover {background-color: #ddd;}"
+                          "li a {text-decoration: none; color: #008080; display: block;}"
+                          "li.subdir a {color: #2b00ff;}"
+                          "li:hover {background-color: #f0f0f0;}"
                           "</style></head><body><ul>";
 
 const char html_end[] = "</ul></body></html>";
@@ -346,7 +347,7 @@ void serve_dir(const int connfd, Http_request_header req_header, Http_response_h
         else
         {
             // If we are in a subdirectory
-            snprintf(item, sizeof(item), "<li><a href=\"%s/%s\">%s</a></li>", req_header.path, entry->d_name, entry->d_name);
+            snprintf(item, sizeof(item), "<li class=\"subdir\"><a href=\"%s/%s\">%s</a></li>", req_header.path, entry->d_name, entry->d_name);
         }
         strncat(html_body, item, sizeof(html_body) - strlen(html_body) - 1);
     }
