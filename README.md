@@ -1,5 +1,5 @@
 # HTTPwebServer
-A simple http web server written in C
+A http web server written in C
 
 ## Setup
 1. Compile the program
